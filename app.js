@@ -127,8 +127,8 @@
     const slot = C / n;
     const dotPct = Math.max(6.5, Math.min(16, slot * 0.74));
     const k = Math.max(0.72, Math.min(1.12, window.innerHeight / 780));
-    const size = n <= 2 ? [150, 56, 17] : n <= 4 ? [128, 46, 16]
-               : n <= 6 ? [112, 39, 15] : n <= 8 ? [98, 33, 14] : [88, 28, 13];
+    const size = n <= 2 ? [150, 88, 17] : n <= 4 ? [128, 78, 16]
+               : n <= 6 ? [112, 71, 15] : n <= 8 ? [98, 65, 14] : [88, 60, 13];
     const root = document.documentElement.style;
     root.setProperty("--dot-pct", dotPct.toFixed(2));
     root.setProperty("--label-span", Math.round(size[0] * k) + "px");
