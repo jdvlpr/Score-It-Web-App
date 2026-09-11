@@ -242,7 +242,7 @@
     labelEls.get(p.id)?.el.classList.add("is-active");
     clearTimeout(readoutTimer);
     showReadout(0);
-    setScoreText(p.id, fmt(0));
+    setScoreText(p.id, p.score);   // the label previews the resulting total, not the delta
     drawArc(p, 0);
   });
 
@@ -262,7 +262,7 @@
     drag.pending = next;
     const p = byId(drag.id);
     showReadout(next * state.settings.step);
-    setScoreText(drag.id, fmt(next * state.settings.step));
+    setScoreText(drag.id, p.score + next * state.settings.step);
     drawArc(p, next);
     feedback();
   }, { passive: false });
