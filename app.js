@@ -112,13 +112,14 @@
 
   /* ---------------- rendering ---------------- */
 
-  const app = $(".app"), dial = $("#dial"), dotsEl = $("#dots"), arcEl = $("#ring-arc"),
+  const app = $(".app"), dial = $("#dial"), dotsEl = $("#dots"), trailEl = $("#trail"),
         readout = $("#readout"), topEl = $("#labels-top"), botEl = $("#labels-bottom");
 
   const labelEls = new Map();
   const dotEls = new Map();
 
   function render() {
+    settle();                      // never rebuild the dots out from under a live gesture
     const n = state.players.length;
     const seats = state.players.map((p, i) => ({ p, i, a: seatAngle(i, n) }));
 
@@ -165,7 +166,7 @@
     bottom.sort(leftToRight);
     fillLabels(topEl, top);
     fillLabels(botEl, bottom);
-    drawArc(null, 0);
+    clearTrail();
   }
 
   function fillLabels(host, group) {
@@ -198,33 +199,103 @@
     if (l) l.score.textContent = text;
   }
 
-  function drawArc(player, pending) {
-    if (!player || !pending) {
-      arcEl.setAttribute("stroke-dasharray", `0 ${C}`);
-      return;
-    }
-    const steps = state.settings.steps;
-    const mag = Math.abs(pending);
-    const frac = mag % steps === 0 ? 1 : (mag % steps) / steps;
-    const len = frac * C;
-    const seat = seatAngle(state.players.indexOf(player), state.players.length);
-    const start = pending >= 0 ? seat : seat - frac * 360;
-    arcEl.setAttribute("stroke-dasharray", `${len.toFixed(2)} ${(C - len).toFixed(2)}`);
-    arcEl.setAttribute("transform", `rotate(${start.toFixed(2)} 50 50)`);
+  // How far behind the dot the trail keeps its full strength before easing back a shade.
+  const FADE = 360;
+
+  function clearTrail() { trailEl.style.background = "none"; }
+
+  // The trail runs back from the dot toward the player's seat. A conic gradient is the
+  // only thing that can fade *along* an arc; the mask makes it a band. Past a full lap
+  // it simply stays a closed ring rather than starting the sweep over.
+  function drawTrail(seat, off, strong, faint) {
+    const mag = Math.abs(off);
+    if (mag < 0.2) return clearTrail();
+    const m = Math.min(mag, 360);
+    const fade = Math.min(m, FADE);
+    const cw = off >= 0;
+    const dot = seat + off;
+    const from = (cw ? dot - m : dot) + 90;     // CSS conic 0deg is twelve o'clock
+    const stops = cw
+      ? `${faint} 0deg, ${faint} ${(m - fade).toFixed(2)}deg, ${strong} ${m.toFixed(2)}deg, transparent ${m.toFixed(2)}deg`
+      : `${strong} 0deg, ${faint} ${fade.toFixed(2)}deg, ${faint} ${m.toFixed(2)}deg, transparent ${m.toFixed(2)}deg`;
+    trailEl.style.background = `conic-gradient(from ${from.toFixed(2)}deg, ${stops})`;
+  }
+
+  // Only the active dot ever leaves its seat, and only by a transform — the seat
+  // percentages that the whole 1-12 layout rests on are never touched.
+  function placeDot(id, seat, off, rr) {
+    const el = dotEls.get(id);
+    if (!el) return;
+    const a = ((seat + off) * Math.PI) / 180, s = (seat * Math.PI) / 180;
+    const dx = rr * (Math.cos(a) - Math.cos(s)), dy = rr * (Math.sin(a) - Math.sin(s));
+    el.style.transform = `translate(-50%, -50%) translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px)`;
   }
 
   const fmt = (d) => (d > 0 ? "+" + d : String(d));
 
   /* ---------------- the swipe dial ---------------- */
 
-  let drag = null;
-  let readoutTimer = 0;
+  let drag = null;      // the gesture: what the finger is doing
+  let anim = null;      // the picture: where the dot actually is on screen
+  let readoutTimer = 0, rafId = 0;
 
-  function angleAt(e) {
-    const r = dial.getBoundingClientRect();
-    const x = e.clientX - (r.left + r.width / 2);
-    const y = e.clientY - (r.top + r.height / 2);
-    return { deg: (Math.atan2(y, x) * 180) / Math.PI, dist: Math.hypot(x, y) / (r.width / 2) };
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+
+  const HUB = 0.2;      // inside this fraction of the dial, the dial stops amplifying
+  const SLACK = 1.06;   // headroom so a normal arc on the track is never clipped
+
+  // Accumulate the angle the finger has swept, walking the segment in small steps and
+  // capping each one at what its travel could plausibly sweep at that radius. Far out
+  // the cap never bites and this is exactly the shortest-arc difference; near the hub
+  // it keeps a millimetre of wobble from spinning the dial, so the finger can cross the
+  // middle, or leave the dial entirely, and the dot just keeps going.
+  function advance(d, x1, y1) {
+    const dist = Math.hypot(x1 - d.lx, y1 - d.ly);
+    const n = Math.min(48, Math.max(1, Math.ceil(dist / 4)));
+    const floor = d.rad * HUB;
+    let px = d.lx, py = d.ly, a0 = Math.atan2(py, px);
+    for (let i = 1; i <= n; i++) {
+      const qx = d.lx + (x1 - d.lx) * (i / n), qy = d.ly + (y1 - d.ly) * (i / n);
+      const a1 = Math.atan2(qy, qx);
+      let da = ((a1 - a0 + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+      const cap = (SLACK * Math.hypot(qx - px, qy - py)) / Math.max(Math.hypot(qx, qy), floor);
+      if (da > cap) da = cap; else if (da < -cap) da = -cap;
+      d.acc += (da * 180) / Math.PI;
+      a0 = a1; px = qx; py = qy;
+    }
+    d.lx = x1; d.ly = y1;
+  }
+
+  const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+  // Only the rewind is animated. While the finger is down the dot is written straight
+  // to the finger's angle, so it can never lag behind it.
+  function loop(t) {
+    rafId = 0;
+    if (!anim || !anim.rw) return;
+    const k = Math.min(1, (t - anim.rw.t0) / anim.rw.dur);
+    anim.shown = anim.rw.from * (1 - easeInOut(k));
+    paint();
+    if (k >= 1) return settle();
+    rafId = requestAnimationFrame(loop);
+  }
+
+  function paint() {
+    placeDot(anim.id, anim.seat, anim.shown, anim.rr);
+    drawTrail(anim.seat, anim.shown, anim.strong, anim.faint);
+  }
+
+  // Land the dot back in its seat and give the ring back to everybody.
+  function settle() {
+    if (!anim) return;
+    if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+    clearTimeout(anim.rw && anim.rw.guard);
+    const el = dotEls.get(anim.id);
+    if (el) { el.style.transform = ""; el.classList.remove("is-active"); }
+    labelEls.get(anim.id)?.el.classList.remove("is-active");
+    clearTrail();
+    dial.classList.remove("is-dragging");
+    anim = null;
   }
 
   dial.addEventListener("pointerdown", (e) => {
@@ -233,17 +304,29 @@
     const p = byId(dot.dataset.id);
     if (!p) return;
     e.preventDefault();
+    settle();                                  // a rewind still in flight lands now
     try { dial.setPointerCapture(e.pointerId); } catch (_) {}
-    const a = angleAt(e);
-    drag = { pid: e.pointerId, id: p.id, last: a.deg, acc: 0, pending: 0, moved: false, x: e.clientX, y: e.clientY };
+    const r = dial.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const seat = seatAngle(state.players.indexOf(p), state.players.length);
+    drag = {
+      pid: e.pointerId, id: p.id, seat, acc: 0, pending: 0, moved: false,
+      x: e.clientX, y: e.clientY,
+      lx: e.clientX - cx, ly: e.clientY - cy, rad: r.width / 2,
+    };
+    anim = {
+      id: p.id, seat, shown: 0, rw: null, rr: r.width * (R / 100),
+      strong: `color-mix(in srgb, ${p.color} 55%, transparent)`,
+      faint: `color-mix(in srgb, ${p.color} 0%, transparent)`,
+    };
     dial.classList.add("is-dragging");
-    dial.style.setProperty("--arc-color", p.color);
+    dial.style.setProperty("--live-color", p.color);
     dot.classList.add("is-active");
     labelEls.get(p.id)?.el.classList.add("is-active");
     clearTimeout(readoutTimer);
     showReadout(0);
     setScoreText(p.id, p.score);   // the label previews the resulting total, not the delta
-    drawArc(p, 0);
+    clearTrail();
   });
 
   // move/up live on window, not the dial: with pointer capture the events still bubble here,
@@ -252,18 +335,16 @@
     if (!drag || e.pointerId !== drag.pid) return;
     e.preventDefault();
     if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 10) drag.moved = true;
-    const a = angleAt(e);
-    if (a.dist < 0.16) { drag.last = null; return; }   // dead zone: angles go wild near the hub
-    if (drag.last === null) { drag.last = a.deg; return; }
-    drag.acc += ((a.deg - drag.last + 540) % 360) - 180; // shortest arc — never jumps the seam
-    drag.last = a.deg;
+    const r = dial.getBoundingClientRect();
+    advance(drag, e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+    anim.shown = drag.acc;
+    paint();
     const next = Math.round(drag.acc / (360 / state.settings.steps));
     if (next === drag.pending) return;
     drag.pending = next;
     const p = byId(drag.id);
     showReadout(next * state.settings.step);
     setScoreText(drag.id, p.score + next * state.settings.step);
-    drawArc(p, next);
     feedback();
   }, { passive: false });
 
@@ -271,9 +352,6 @@
     if (!drag || e.pointerId !== drag.pid) return;
     const d = drag;
     drag = null;
-    dial.classList.remove("is-dragging");
-    dotEls.get(d.id)?.classList.remove("is-active");
-    labelEls.get(d.id)?.el.classList.remove("is-active");
     const delta = (d.moved ? d.pending : 1) * state.settings.step;   // a tap with no swipe is one step
     if (delta) {
       commit(d.id, delta);
@@ -288,7 +366,17 @@
     labelEls.get(d.id)?.score.classList.remove("pop");
     void labelEls.get(d.id)?.score.offsetWidth;
     if (delta) labelEls.get(d.id)?.score.classList.add("pop");
-    drawArc(null, 0);
+    // The score is already banked; the dot just winds itself home. Everyone else stays
+    // faded until it lands, so it never flies through a dot that is fading back in.
+    if (anim && !reduced.matches && Math.abs(anim.shown) > 0.5) {
+      const dur = Math.min(560, 240 + (Math.abs(anim.shown) / 360) * 220);
+      const rw = anim.rw = { from: anim.shown, t0: performance.now(), dur, guard: 0 };
+      // A frame callback that never arrives (hidden tab) must not strand the dot.
+      rw.guard = setTimeout(() => { if (anim && anim.rw === rw) settle(); }, dur + 400);
+      rafId = requestAnimationFrame(loop);
+    } else {
+      settle();
+    }
     if (sheetOpen === "history") renderHistory();
   };
   addEventListener("pointerup", endDrag);

@@ -179,15 +179,18 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   stroke-width: calc(var(--dot-pct) * 1.24px);
 }
 
-.ring-arc {
-  fill: none;
-  stroke: var(--arc-color, transparent);
-  stroke-width: calc(var(--dot-pct) * 1.24px);
-  stroke-linecap: round;
-  opacity: 0;
-  transition: opacity .22s linear;
+/* The swept trail. A conic gradient carved into the track band by a radial mask:
+   full-strength where the dot is, easing back a shade over the tail behind it. */
+.trail {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  /* half the track's stroke width, as a percentage of the dial's radius */
+  --band: calc(var(--dot-pct) * 1.24%);
+  -webkit-mask: radial-gradient(closest-side, #0000 calc(76% - var(--band)), #000 calc(76% - var(--band)), #000 calc(76% + var(--band)), #0000 calc(76% + var(--band)));
+  mask: radial-gradient(closest-side, #0000 calc(76% - var(--band)), #000 calc(76% - var(--band)), #000 calc(76% + var(--band)), #0000 calc(76% + var(--band)));
 }
-.dial.is-dragging .ring-arc { opacity: 1; }
 
 .dots { position: absolute; inset: 0; }
 
@@ -216,7 +219,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .dot:active .dot-fill { transform: scale(.9); }
 .dial.is-dragging .dot { opacity: 0; }   /* the ring belongs to one player mid-swipe */
 .dial.is-dragging .dot.is-active { opacity: 1; }
-.dial.is-dragging .dot.is-active .dot-fill { transform: scale(1.1); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 22%, transparent); }
+.dial.is-dragging .dot.is-active .dot-fill { transform: scale(1.2); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 22%, transparent); }
 
 .readout {
   position: absolute;
@@ -227,7 +230,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   font-weight: 800;
   letter-spacing: -.05em;
   font-variant-numeric: tabular-nums;
-  color: var(--arc-color, var(--text));
+  color: var(--live-color, var(--text));
   opacity: 0;
   transform: scale(.82);
   transition: opacity .2s linear, transform .32s var(--ease);
