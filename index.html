@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Score It</title>
+<meta name="description" content="A beautiful, fluid scorekeeper for 1–12 players. Swipe the dial to score.">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Score It">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app">
+  <header class="topbar">
+    <button class="iconbtn" id="open-history" aria-label="Score history">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h11.5a2.5 2.5 0 0 1 2.5 2.5v12.5H7.5A2.5 2.5 0 0 1 5 17V4.5Z"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4"/></svg>
+    </button>
+    <div class="brand" id="brand">Score It</div>
+    <button class="iconbtn" id="open-players" aria-label="Players and settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 3.6v2.2M12 18.2v2.2M20.4 12h-2.2M5.8 12H3.6M17.9 6.1l-1.6 1.6M7.7 16.3l-1.6 1.6M17.9 17.9l-1.6-1.6M7.7 7.7 6.1 6.1"/></svg>
+    </button>
+  </header>
+
+  <div class="labels labels-top" id="labels-top"></div>
+
+  <div class="stage">
+    <div class="dial" id="dial">
+      <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="ring-track" id="ring-track" cx="50" cy="50" r="38"></circle>
+        <circle class="ring-arc" id="ring-arc" cx="50" cy="50" r="38"></circle>
+      </svg>
+      <div class="dots" id="dots"></div>
+      <div class="readout" id="readout" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="labels labels-bottom" id="labels-bottom"></div>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<section class="sheet" id="sheet-players" hidden aria-label="Players">
+  <div class="sheet-grab"></div>
+  <header class="sheet-head">
+    <h2>Players</h2>
+    <button class="textbtn" data-close>Done</button>
+  </header>
+  <div class="sheet-body">
+    <div class="rows" id="player-rows"></div>
+    <button class="rowbtn" id="add-player">
+      <svg viewBox="0 0 24 24" class="plus" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg>
+      Add Player
+    </button>
+    <div class="rows setting-rows">
+      <div class="row seg-row">
+        <span>Score step</span>
+        <div class="seg" id="opt-step" role="group" aria-label="Score step">
+          <button type="button" data-v="1">1</button>
+          <button type="button" data-v="5">5</button>
+          <button type="button" data-v="10">10</button>
+          <button type="button" data-v="25">25</button>
+          <button type="button" data-v="50">50</button>
+        </div>
+      </div>
+      <label class="row switch-row">
+        <span>Haptics</span>
+        <input type="checkbox" id="opt-haptics" class="switch">
+      </label>
+      <label class="row switch-row">
+        <span>Tick sound</span>
+        <input type="checkbox" id="opt-sound" class="switch">
+      </label>
+      <label class="row range-row">
+        <span>Sensitivity</span>
+        <input type="range" id="opt-steps" min="6" max="24" step="2">
+        <em id="opt-steps-val"></em>
+      </label>
+    </div>
+    <button class="rowbtn danger" id="reset-scores">Reset all scores</button>
+    <p class="hint">Press a dot and swipe around the ring to score. Tap a name to rotate it.</p>
+  </div>
+</section>
+
+<section class="sheet" id="sheet-history" hidden aria-label="Score history">
+  <div class="sheet-grab"></div>
+  <header class="sheet-head">
+    <h2>History</h2>
+    <button class="textbtn" data-close>Done</button>
+  </header>
+  <div class="sheet-body">
+    <div class="standings" id="standings"></div>
+    <div class="log" id="log"></div>
+  </div>
+  <footer class="sheet-foot">
+    <button class="bigbtn" id="undo">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5.5 4.5 10 9 14.5"/><path d="M4.5 10h9a6 6 0 0 1 0 12h-2"/></svg>
+      Undo
+    </button>
+    <button class="bigbtn" id="redo">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5.5 19.5 10 15 14.5"/><path d="M19.5 10h-9a6 6 0 0 0 0 12h2"/></svg>
+      Redo
+    </button>
+  </footer>
+</section>
+
+<div class="picker" id="picker" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
