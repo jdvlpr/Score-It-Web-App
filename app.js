@@ -9,7 +9,6 @@
   const MAX_PLAYERS = 12;
   const MAX_LOG = 250;
   const STEPS = [1, 5, 10, 25, 50];   // points added per stop on the ring
-  const TICK_LEN = 1;                 // tick dash length, in viewBox units (matches styles.css)
 
   const PALETTE = [
     "#ff3b30", "#0a3cff", "#ffe814", "#35e63a", "#45e6ff", "#ff3fdd",
@@ -127,27 +126,6 @@
   const labelEls = new Map();
   const dotEls = new Map();
 
-  // The ring's stops are drawn as one dashed circle: `stroke-dasharray: TICK_LEN gap`.
-  // For the dashes to come out evenly, one dash plus one gap has to divide the
-  // circumference exactly, so the gap follows from the sensitivity.
-  function applyTickSpacing() {
-    const gap = C / state.settings.steps - TICK_LEN;
-    document.documentElement.style.setProperty("--ring-tick-spacing", gap.toFixed(3));
-  }
-
-  // The ticks are a single dashed circle, so the whole ring is turned with one dash
-  // offset. The dash pattern starts at 3 o'clock and runs clockwise, the same way
-  // seat angles do, so putting the middle of a dash at `at` lands every other tick
-  // exactly one stop apart from there. Fed the dot's live angle it reads as a dial:
-  // the tick under the dot stays under it and the whole ring turns with the finger.
-  // Wrapping into one period keeps the number small without moving anything — the
-  // pattern repeats, so offset and offset + period draw the same ring.
-  function applyTickPhase(at) {
-    const period = C / state.settings.steps;
-    const start = (C * at) / 360;                                     // arc distance to that angle
-    const off = (((TICK_LEN / 2 - start) % period) + period) % period;
-    document.documentElement.style.setProperty("--ring-tick-offset", off.toFixed(3));
-  }
 
   function render() {
     settle();                      // never rebuild the dots out from under a live gesture
@@ -165,7 +143,6 @@
     root.setProperty("--label-span", Math.round(size[0] * k) + "px");
     root.setProperty("--score-fs", Math.round(size[1] * k) + "px");
     root.setProperty("--name-fs", Math.round(size[2] * k) + "px");
-    applyTickSpacing();
 
     dotsEl.textContent = "";
     dotEls.clear();
@@ -365,7 +342,6 @@
 
   function paint() {
     placeDot(anim.id, anim.seat, anim.shown, anim.rr);
-    applyTickPhase(anim.seat + anim.shown);
     drawTrail(anim.seat, anim.shown, anim.strong, anim.faint);
   }
 
@@ -404,8 +380,6 @@
       strong: `color-mix(in srgb, ${p.color} 35%, transparent)`,
       faint: `color-mix(in srgb, ${p.color} 0%, transparent)`,
     };
-    applyTickSpacing();                 // both are cheap, and the ticks are about to be shown
-    applyTickPhase(seat);               // where the ring rests until the first paint turns it
     dial.classList.add("is-dragging");
     app.classList.add("is-dragging");   // every other player's score steps back
     dot.classList.add("is-active");
@@ -482,17 +456,30 @@
 
   /* haptics + tick */
   let actx = null;
+
   function feedback(strong) {
+    // Haptics: Will silently fail on iOS Safari (unsupported)
     if (state.settings.haptics && navigator.vibrate) navigator.vibrate(strong ? 16 : 7);
     if (!state.settings.sound) return;
     try {
       actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
+
+      // CRITICAL FOR IOS SAFARI: Unlock the suspended context
+      if (actx.state === 'suspended') {
+        actx.resume();
+      }
+
+      const t = actx.currentTime;
+      const o = actx.createOscillator();
+      const g = actx.createGain();
+
       o.type = "sine";
       o.frequency.value = strong ? 440 : 680;
+
       g.gain.setValueAtTime(0.0001, t);
       g.gain.exponentialRampToValueAtTime(strong ? 0.16 : 0.09, t + 0.006);
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+
       o.connect(g).connect(actx.destination);
       o.start(t);
       o.stop(t + 0.09);
@@ -604,7 +591,7 @@
   stepsLabel();
   optH.onchange = () => { state.settings.haptics = optH.checked; save(); };
   optS.onchange = () => { state.settings.sound = optS.checked; if (optS.checked) feedback(); save(); };
-  optSteps.oninput = () => { state.settings.steps = +optSteps.value; stepsLabel(); applyTickSpacing(); save(); };
+  optSteps.oninput = () => { state.settings.steps = +optSteps.value; stepsLabel(); save(); };
 
   const stepSeg = $("#opt-step");
   const syncStep = () => stepSeg.querySelectorAll("button").forEach((b) =>
