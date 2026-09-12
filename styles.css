@@ -263,8 +263,30 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: all .22s var(--ease);
 }
 
+.ring-track-outer {
+    display:none;
+  transition: all .22s var(--ease);
+}
+
+.ring-track-inner {
+    display:none;
+  transition: all .22s var(--ease);
+}
+.dial.is-dragging .ring-track-inner {
+    display:inline-block;
+  stroke: var(--track);
+  stroke-width: calc(var(--dot-pct) * 0.2px);
+}
+
+.dial.is-dragging .ring-track-outer {
+    display:inline-block;
+  fill: none;
+  stroke: var(--track);
+  stroke-width: calc(var(--dot-pct) * 0.3px);
+}
+
 .dial.is-dragging .ring-track {
-    fill: var(--track);
+    /*fill: var(--track);*/
   stroke: var(--bg);
   stroke-width: calc(var(--dot-pct) * 1.24px);
 }
