@@ -455,72 +455,62 @@
   });
 
   /* haptics + tick */
-  let actx = null;
-  let audioUnlocked = false;
+    let actx = null;
 
-  // 1. Create a function to explicitly unlock the audio context
-  function primeAudioContext() {
-    if (audioUnlocked) return;
+    // 1. Create a function to unlock audio on the first valid user interaction
+    const unlockAudio = () => {
+      if (!state.settings.sound) return;
+      try {
+        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+        if (actx.state === 'suspended') actx.resume();
 
-    try {
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+        // Play a completely silent oscillator for 1ms to fully unlock iOS audio
+        const osc = actx.createOscillator();
+        const gain = actx.createGain();
+        gain.gain.value = 0;
+        osc.connect(gain).connect(actx.destination);
+        osc.start(0);
+        osc.stop(actx.currentTime + 0.001);
 
-      if (actx.state === 'suspended') {
-        actx.resume();
-      }
+        // Once unlocked, clean up these listeners so they don't fire again
+        window.removeEventListener("pointerdown", unlockAudio, true);
+        window.removeEventListener("touchstart", unlockAudio, true);
+        window.removeEventListener("keydown", unlockAudio, true);
+      } catch (_) {}
+    };
 
-      // Play a silent, empty buffer to fully force the unlock on iOS
-      const buffer = actx.createBuffer(1, 1, 22050);
-      const source = actx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(actx.destination);
-      source.start(0);
+    // 2. Bind the unlocker globally to catch the very first touch/click
+    window.addEventListener("pointerdown", unlockAudio, true);
+    window.addEventListener("touchstart", unlockAudio, true);
+    window.addEventListener("keydown", unlockAudio, true);
 
-      audioUnlocked = true;
+    function feedback(strong) {
+      // Haptics: Will silently fail on iOS Safari (unsupported)
+      if (state.settings.haptics && navigator.vibrate) navigator.vibrate(strong ? 16 : 7);
+      if (!state.settings.sound) return;
+      try {
+        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
 
-      // Clean up event listeners once unlocked
-      window.removeEventListener('touchstart', primeAudioContext);
-      window.removeEventListener('pointerdown', primeAudioContext);
-      window.removeEventListener('click', primeAudioContext);
-    } catch (e) {
-      console.error("Audio unlock failed:", e);
+        if (actx.state === 'suspended') {
+          actx.resume();
+        }
+
+        const t = actx.currentTime;
+        const o = actx.createOscillator();
+        const g = actx.createGain();
+
+        o.type = "sine";
+        o.frequency.value = strong ? 440 : 680;
+
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(strong ? 0.16 : 0.09, t + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+
+        o.connect(g).connect(actx.destination);
+        o.start(t);
+        o.stop(t + 0.09);
+      } catch (_) {}
     }
-  }
-
-  // 2. Attach the unlocker to the first user interactions
-  window.addEventListener('touchstart', primeAudioContext, { once: true });
-  window.addEventListener('pointerdown', primeAudioContext, { once: true });
-  window.addEventListener('click', primeAudioContext, { once: true });
-
-  function feedback(strong) {
-    // Haptics: Will silently fail on iOS Safari (unsupported)
-    if (state.settings.haptics && navigator.vibrate) navigator.vibrate(strong ? 16 : 7);
-    if (!state.settings.sound) return;
-
-    try {
-      // Ensure context exists just in case feedback is called before a tap
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-
-      if (actx.state === 'suspended') {
-        actx.resume();
-      }
-
-      const t = actx.currentTime;
-      const o = actx.createOscillator();
-      const g = actx.createGain();
-
-      o.type = "sine";
-      o.frequency.value = strong ? 440 : 680;
-
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(strong ? 0.16 : 0.09, t + 0.006);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
-
-      o.connect(g).connect(actx.destination);
-      o.start(t);
-      o.stop(t + 0.09);
-    } catch (_) {}
-  }
 
   /* tap a name to rotate it toward whoever is sitting there */
   const rotate = (e) => {
