@@ -401,7 +401,7 @@
     };
     anim = {
       id: p.id, seat, shown: 0, rw: null, rr: r.width * (R / 100),
-      strong: `color-mix(in srgb, ${p.color} 55%, transparent)`,
+      strong: `color-mix(in srgb, ${p.color} 35%, transparent)`,
       faint: `color-mix(in srgb, ${p.color} 0%, transparent)`,
     };
     applyTickSpacing();                 // both are cheap, and the ticks are about to be shown
