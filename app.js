@@ -362,6 +362,7 @@
   dial.addEventListener("pointerdown", (e) => {
     const dot = e.target.closest(".dot");
     if (!dot || drag) return;
+    unlockAudio();
     const p = byId(dot.dataset.id);
     if (!p) return;
     e.preventDefault();
@@ -455,58 +456,56 @@
   });
 
   /* haptics + tick */
-    let actx = null;
+  let actx = null;
 
-    // Unlock the Web Audio API on the very first touch,
-    // regardless of the user's sound setting.
-    const unlockAudio = () => {
-      try {
-        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-        if (actx.state === 'suspended') actx.resume();
+  function unlockAudio() {
 
-        const osc = actx.createOscillator();
-        const gain = actx.createGain();
-        gain.gain.value = 0; // Completely silent
-        osc.connect(gain).connect(actx.destination);
-        osc.start(0);
-        osc.stop(actx.currentTime + 0.001);
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
 
-        // Once successfully unlocked, remove the listeners
-        ["touchstart", "touchend", "click", "keydown"].forEach(e =>
-          document.removeEventListener(e, unlockAudio, true)
-        );
-      } catch (_) {}
-    };
+      if (actx.state === "suspended") {
+        actx.resume();
+      }
 
-    // iOS explicitly trusts these events for audio (pointer events are unreliable).
-    ["touchstart", "touchend", "click", "keydown"].forEach(e =>
-      document.addEventListener(e, unlockAudio, true)
-    );
+      // Tiny silent sound started directly inside the user's gesture.
+      const o = actx.createOscillator();
+      const g = actx.createGain();
 
-    function feedback(strong) {
-      if (state.settings.haptics && navigator.vibrate) navigator.vibrate(strong ? 16 : 7);
-      if (!state.settings.sound) return; // Only play if enabled
+      g.gain.value = 0.00001;
+      o.connect(g).connect(actx.destination);
+      o.start();
+      o.stop(actx.currentTime + 0.01);
+    } catch (_) {}
+  }
 
-      try {
-        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-        if (actx.state === 'suspended') actx.resume();
+  function feedback(strong) {
+    // Haptics: Will silently fail on iOS Safari (unsupported)
+    if (state.settings.haptics && navigator.vibrate) navigator.vibrate(strong ? 16 : 7);
+    if (!state.settings.sound) return;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
 
-        const t = actx.currentTime;
-        const o = actx.createOscillator();
-        const g = actx.createGain();
+      // CRITICAL FOR IOS SAFARI: Unlock the suspended context
+      if (actx.state === 'suspended') {
+        actx.resume();
+      }
 
-        o.type = "sine";
-        o.frequency.value = strong ? 440 : 680;
+      const t = actx.currentTime;
+      const o = actx.createOscillator();
+      const g = actx.createGain();
 
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(strong ? 0.16 : 0.09, t + 0.006);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+      o.type = "sine";
+      o.frequency.value = strong ? 440 : 680;
 
-        o.connect(g).connect(actx.destination);
-        o.start(t);
-        o.stop(t + 0.09);
-      } catch (_) {}
-    }
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(strong ? 0.16 : 0.09, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+
+      o.connect(g).connect(actx.destination);
+      o.start(t);
+      o.stop(t + 0.09);
+    } catch (_) {}
+  }
 
   /* tap a name to rotate it toward whoever is sitting there */
   const rotate = (e) => {
