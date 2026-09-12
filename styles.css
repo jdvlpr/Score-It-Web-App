@@ -21,6 +21,7 @@
 
   /* Set from JS, by sensitivity: the gap between ring ticks. Fallback = 12 stops. */
   --ring-tick-spacing: 17.897;
+  --ring-tick-offset: 0;
 }
 
 * { box-sizing: border-box; }
@@ -268,7 +269,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 .ring-ticks {
 opacity:0;
-  transition: all .22s var(--ease);
+  /* not `all`: the dash offset is re-aimed per gesture and must not animate there */
+  transition: opacity .22s var(--ease), stroke-width .22s var(--ease), stroke .22s var(--ease);
   fill:none;
 }
 
@@ -277,7 +279,7 @@ opacity:0;
     stroke: var(--bg);
     stroke-width: 4;
     stroke-dasharray: 0.5 var(--ring-tick-spacing);   /* dash length mirrored by TICK_LEN in app.js */
-    transform: rotate(-90 50 50);
+    stroke-dashoffset: var(--ring-tick-offset);    /* aims a tick at the dot being dragged */
 }
 
 .dial.is-dragging .ring-track {

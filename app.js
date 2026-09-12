@@ -135,6 +135,17 @@
     document.documentElement.style.setProperty("--ring-tick-spacing", gap.toFixed(3));
   }
 
+  // The ticks are a single dashed circle, so the whole ring is aimed with one dash
+  // offset. The dash pattern starts at 3 o'clock and runs clockwise, the same way
+  // seat angles do, so putting the middle of a dash at the seat the gesture started
+  // from drops every other tick exactly one stop apart from there.
+  function applyTickPhase(seat) {
+    const period = C / state.settings.steps;
+    const start = (C * seat) / 360;                                   // arc distance to the seat
+    const off = (((TICK_LEN / 2 - start) % period) + period) % period;
+    document.documentElement.style.setProperty("--ring-tick-offset", off.toFixed(3));
+  }
+
   function render() {
     settle();                      // never rebuild the dots out from under a live gesture
     const n = state.players.length;
@@ -389,6 +400,8 @@
       strong: `color-mix(in srgb, ${p.color} 55%, transparent)`,
       faint: `color-mix(in srgb, ${p.color} 0%, transparent)`,
     };
+    applyTickSpacing();                 // both are cheap, and the ticks are about to be shown
+    applyTickPhase(seat);
     dial.classList.add("is-dragging");
     app.classList.add("is-dragging");   // every other player's score steps back
     dot.classList.add("is-active");
