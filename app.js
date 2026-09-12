@@ -9,7 +9,7 @@
   const MAX_PLAYERS = 12;
   const MAX_LOG = 250;
   const STEPS = [1, 5, 10, 25, 50];   // points added per stop on the ring
-  const TICK_LEN = 0.5;                 // tick dash length, in viewBox units (matches styles.css)
+  const TICK_LEN = 1;                 // tick dash length, in viewBox units (matches styles.css)
 
   const PALETTE = [
     "#ff3b30", "#0a3cff", "#ffe814", "#35e63a", "#45e6ff", "#ff3fdd",
@@ -135,13 +135,16 @@
     document.documentElement.style.setProperty("--ring-tick-spacing", gap.toFixed(3));
   }
 
-  // The ticks are a single dashed circle, so the whole ring is aimed with one dash
+  // The ticks are a single dashed circle, so the whole ring is turned with one dash
   // offset. The dash pattern starts at 3 o'clock and runs clockwise, the same way
-  // seat angles do, so putting the middle of a dash at the seat the gesture started
-  // from drops every other tick exactly one stop apart from there.
-  function applyTickPhase(seat) {
+  // seat angles do, so putting the middle of a dash at `at` lands every other tick
+  // exactly one stop apart from there. Fed the dot's live angle it reads as a dial:
+  // the tick under the dot stays under it and the whole ring turns with the finger.
+  // Wrapping into one period keeps the number small without moving anything — the
+  // pattern repeats, so offset and offset + period draw the same ring.
+  function applyTickPhase(at) {
     const period = C / state.settings.steps;
-    const start = (C * seat) / 360;                                   // arc distance to the seat
+    const start = (C * at) / 360;                                     // arc distance to that angle
     const off = (((TICK_LEN / 2 - start) % period) + period) % period;
     document.documentElement.style.setProperty("--ring-tick-offset", off.toFixed(3));
   }
@@ -362,6 +365,7 @@
 
   function paint() {
     placeDot(anim.id, anim.seat, anim.shown, anim.rr);
+    applyTickPhase(anim.seat + anim.shown);
     drawTrail(anim.seat, anim.shown, anim.strong, anim.faint);
   }
 
@@ -401,7 +405,7 @@
       faint: `color-mix(in srgb, ${p.color} 0%, transparent)`,
     };
     applyTickSpacing();                 // both are cheap, and the ticks are about to be shown
-    applyTickPhase(seat);
+    applyTickPhase(seat);               // where the ring rests until the first paint turns it
     dial.classList.add("is-dragging");
     app.classList.add("is-dragging");   // every other player's score steps back
     dot.classList.add("is-active");

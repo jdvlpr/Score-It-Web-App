@@ -269,17 +269,17 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 .ring-ticks {
 opacity:0;
-  /* not `all`: the dash offset is re-aimed per gesture and must not animate there */
+  /* not `all`: the dash offset is rewritten every frame and must never animate */
   transition: opacity .22s var(--ease), stroke-width .22s var(--ease), stroke .22s var(--ease);
   fill:none;
 }
 
 .dial.is-dragging .ring-ticks {
     opacity:1;
-    stroke: var(--bg);
-    stroke-width: 4;
-    stroke-dasharray: 0.5 var(--ring-tick-spacing);   /* dash length mirrored by TICK_LEN in app.js */
-    stroke-dashoffset: var(--ring-tick-offset);    /* aims a tick at the dot being dragged */
+    stroke: var(--surface);
+    stroke-width: 13;
+    stroke-dasharray: 1 var(--ring-tick-spacing);   /* dash length mirrored by TICK_LEN in app.js */
+    stroke-dashoffset: var(--ring-tick-offset);    /* turns the ring with the dot, from JS */
 }
 
 .dial.is-dragging .ring-track {
