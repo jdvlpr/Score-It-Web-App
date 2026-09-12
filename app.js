@@ -412,7 +412,7 @@
     if (!drag || e.pointerId !== drag.pid) return;
     const d = drag;
     drag = null;
-    const delta = (d.moved ? d.pending : 1) * state.settings.step;   // a tap with no swipe is one step
+    const delta = (d.moved ? d.pending : 0) * state.settings.step;   // a tap with no swipe is no steps
     if (delta) {
       commit(d.id, delta);
       feedback(true);

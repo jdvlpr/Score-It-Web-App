@@ -302,7 +302,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .dot:active .dot-fill { transform: scale(.9); }
 .dial.is-dragging .dot { opacity: 0; }   /* the ring belongs to one player mid-swipe */
 .dial.is-dragging .dot.is-active { opacity: 1; }
-.dial.is-dragging .dot.is-active .dot-fill { transform: scale(1.2); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 22%, transparent); }
+.dial.is-dragging .dot.is-active .dot-fill { transform: scale(1.225); box-shadow: 0 0 5px color-mix(in srgb, var(--c) 75%, transparent); }
 
 /* ---------- sheets ---------- */
 
