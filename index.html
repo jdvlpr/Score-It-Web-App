@@ -34,7 +34,10 @@
     <div class="dial" id="dial">
       <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
         <circle class="ring-track" id="ring-track" cx="50" cy="50" r="38"></circle>
+        <circle class="ring-ticks" cx="50" cy="50" r="38" />
+        <!-- One stop per tick; the dash gap is set from JS, by sensitivity. -->
       </svg>
+
       <div class="trail" id="trail"></div>
       <div class="dots" id="dots"></div>
     </div>

@@ -18,6 +18,9 @@
   --label-span: 108px;
   --score-fs: 40px;
   --name-fs: 15px;
+
+  /* Set from JS, by sensitivity: the gap between ring ticks. Fallback = 12 stops. */
+  --ring-tick-spacing: 17.897;
 }
 
 * { box-sizing: border-box; }
@@ -261,6 +264,20 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   stroke: var(--track);
   stroke-width: calc(var(--dot-pct));
   transition: all .22s var(--ease);
+}
+
+.ring-ticks {
+opacity:0;
+  transition: all .22s var(--ease);
+  fill:none;
+}
+
+.dial.is-dragging .ring-ticks {
+    opacity:1;
+    stroke: var(--bg);
+    stroke-width: 4;
+    stroke-dasharray: 0.5 var(--ring-tick-spacing);   /* dash length mirrored by TICK_LEN in app.js */
+    transform: rotate(-90 50 50);
 }
 
 .dial.is-dragging .ring-track {

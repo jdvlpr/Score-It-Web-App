@@ -9,6 +9,7 @@
   const MAX_PLAYERS = 12;
   const MAX_LOG = 250;
   const STEPS = [1, 5, 10, 25, 50];   // points added per stop on the ring
+  const TICK_LEN = 0.5;                 // tick dash length, in viewBox units (matches styles.css)
 
   const PALETTE = [
     "#ff3b30", "#0a3cff", "#ffe814", "#35e63a", "#45e6ff", "#ff3fdd",
@@ -126,6 +127,14 @@
   const labelEls = new Map();
   const dotEls = new Map();
 
+  // The ring's stops are drawn as one dashed circle: `stroke-dasharray: TICK_LEN gap`.
+  // For the dashes to come out evenly, one dash plus one gap has to divide the
+  // circumference exactly, so the gap follows from the sensitivity.
+  function applyTickSpacing() {
+    const gap = C / state.settings.steps - TICK_LEN;
+    document.documentElement.style.setProperty("--ring-tick-spacing", gap.toFixed(3));
+  }
+
   function render() {
     settle();                      // never rebuild the dots out from under a live gesture
     const n = state.players.length;
@@ -142,6 +151,7 @@
     root.setProperty("--label-span", Math.round(size[0] * k) + "px");
     root.setProperty("--score-fs", Math.round(size[1] * k) + "px");
     root.setProperty("--name-fs", Math.round(size[2] * k) + "px");
+    applyTickSpacing();
 
     dotsEl.textContent = "";
     dotEls.clear();
@@ -577,7 +587,7 @@
   stepsLabel();
   optH.onchange = () => { state.settings.haptics = optH.checked; save(); };
   optS.onchange = () => { state.settings.sound = optS.checked; if (optS.checked) feedback(); save(); };
-  optSteps.oninput = () => { state.settings.steps = +optSteps.value; stepsLabel(); save(); };
+  optSteps.oninput = () => { state.settings.steps = +optSteps.value; stepsLabel(); applyTickSpacing(); save(); };
 
   const stepSeg = $("#opt-step");
   const syncStep = () => stepSeg.querySelectorAll("button").forEach((b) =>
