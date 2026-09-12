@@ -4,7 +4,7 @@
   --bg: #000;
   --surface: #131315;
   --surface-2: #1d1d20;
-  --track: var(--surface);
+  --track: #1f1f22;
   --line: #2a2a2e;
   --text: #f2f2f5;
   --muted: #8b8b92;
@@ -264,7 +264,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 
 .dial.is-dragging .ring-track {
-  stroke-width: calc(var(--dot-pct) * 0.1px);
+  stroke-width: calc(var(--dot-pct) * 0.2px);
 }
 
 /* The swept trail. A conic gradient carved into the track band by a radial mask:
