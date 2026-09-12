@@ -264,22 +264,22 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 
 .ring-track-outer {
-    display:none;
+    opacity:0;
   transition: all .22s var(--ease);
 }
 
 .ring-track-inner {
-    display:none;
+    opacity:0;
   transition: all .22s var(--ease);
 }
 .dial.is-dragging .ring-track-inner {
-    display:inline-block;
+opacity:1;
   stroke: var(--track);
   stroke-width: calc(var(--dot-pct) * 0.2px);
 }
 
 .dial.is-dragging .ring-track-outer {
-    display:inline-block;
+opacity:1;
   fill: none;
   stroke: var(--track);
   stroke-width: calc(var(--dot-pct) * 0.3px);
