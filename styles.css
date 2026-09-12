@@ -287,7 +287,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 .dial.is-dragging .ring-track {
     /*fill: var(--track);*/
-  stroke: var(--bg);
+  stroke: var(--surface);
   stroke-width: calc(var(--dot-pct) * 1.24px);
 }
 
