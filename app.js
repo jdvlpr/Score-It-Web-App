@@ -18,6 +18,12 @@
   ];  // 23 presets + the custom chip = a clean 4x6 grid
   const PICK_ORDER = [0, 3, 2, 1, 5, 4, 16, 11, 13, 9, 12, 19];
 
+  const CROWN = '<svg viewBox="0 0 24 18" aria-hidden="true">' +
+      '<path d="M2.9 13.2 1.4 2.4 7.3 8.2 12 0.8 16.7 8.2 22.6 2.4 21.1 13.2Z"/>' +
+      '<rect x="2.2" y="13.3" width="19.6" height="3.4" rx="1.6"/>' +
+      '<rect x="2.2" y="13.3" width="19.6" height="3.4" fill="#e5983e"/>' +
+      '</svg>';
+
   /* ---------------- state ---------------- */
 
   const fresh = () => ({
@@ -71,6 +77,8 @@
   const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const byId = (id) => state.players.find((p) => p.id === id);
   const displayName = (p, i) => p.name.trim() || "Player " + (i + 1);
+  const labelAria = (p, i, crowned) =>
+    `${displayName(p, i)}: ${p.score}.${crowned ? " Leading." : ""} Tap to rotate.`;
 
   function commit(id, delta) {
     const p = byId(id);
@@ -166,6 +174,7 @@
     bottom.sort(leftToRight);
     fillLabels(topEl, top);
     fillLabels(botEl, bottom);
+    updateCrowns();
     clearTrail();
   }
 
@@ -177,10 +186,14 @@
       el.dataset.id = s.p.id;
       el.style.setProperty("--col", (100 / cols).toFixed(3) + "%");
       el.style.color = s.p.color;
-      el.setAttribute("aria-label", `${displayName(s.p, s.i)}: ${s.p.score}. Tap to rotate.`);
+      el.setAttribute("aria-label", labelAria(s.p, s.i, false));   // updateCrowns has the last word
       const inner = document.createElement("span");
       inner.className = "label-inner";
       inner.style.transform = `rotate(${s.p.rot}deg)`;
+      const crown = document.createElement("span");
+      crown.className = "crown";
+      crown.setAttribute("aria-hidden", "true");
+      crown.innerHTML = CROWN;
       const nm = document.createElement("span");
       nm.className = "name";
       nm.textContent = displayName(s.p, s.i);
@@ -194,7 +207,7 @@
       const stack = document.createElement("span");
       stack.className = "score-stack";
       stack.append(sc, dl);
-      inner.append(nm, stack);
+      inner.append(crown, nm, stack);
       el.appendChild(inner);
       host.appendChild(el);
       labelEls.set(s.p.id, { el, score: sc, delta: dl, inner });
@@ -209,6 +222,40 @@
   function setDeltaText(id, text) {
     const l = labelEls.get(id);
     if (l) l.delta.textContent = text;
+  }
+
+  // Nobody is "in first" until somebody is actually ahead: a board where every score is
+  // still level — two fresh players on 0, say — wears no crowns at all. A tie for the
+  // lead over anyone else crowns all of the tied players.
+  function leaders() {
+    const out = new Set();
+    if (state.players.length < 2) return out;
+    let hi = -Infinity, lo = Infinity;
+    for (const p of state.players) {
+      if (p.score > hi) hi = p.score;
+      if (p.score < lo) lo = p.score;
+    }
+    if (hi === lo) return out;
+    for (const p of state.players) if (p.score === hi) out.add(p.id);
+    return out;
+  }
+
+  function updateCrowns() {
+    const lead = leaders();
+    state.players.forEach((p, i) => {
+      const l = labelEls.get(p.id);
+      if (!l) return;
+      const on = lead.has(p.id);
+      l.el.classList.toggle("is-crowned", on);
+      l.el.setAttribute("aria-label", labelAria(p, i, on));
+    });
+  }
+
+  // Scores changed but the board did not: reuse the labels rather than rebuilding them,
+  // so the crown can transition between players instead of snapping.
+  function refreshScores() {
+    state.players.forEach((p) => setScoreText(p.id, p.score));
+    updateCrowns();
   }
 
   // How far behind the dot the trail keeps its full strength before easing back a shade.
@@ -376,6 +423,7 @@
     // The label hands the number back at release, not when the dot finishes winding home.
     l?.el.classList.remove("is-active");
     app.classList.remove("is-dragging");
+    updateCrowns();   // batched with the line above, so the crown animates out of the drag state
     l?.score.classList.remove("pop");
     void l?.score.offsetWidth;
     if (delta) l?.score.classList.add("pop");
@@ -401,7 +449,7 @@
     const dot = e.target.closest(".dot");
     if (!dot) return;
     commit(dot.dataset.id, state.settings.step);
-    render();
+    refreshScores();
     if (sheetOpen === "history") renderHistory();
   });
 
@@ -518,7 +566,7 @@
     state.players.forEach((p) => (p.score = 0));
     state.log = [];
     state.cursor = 0;
-    save(); render(); renderPlayers();
+    save(); refreshScores(); renderPlayers();
   };
 
   const optH = $("#opt-haptics"), optS = $("#opt-sound"), optSteps = $("#opt-steps"), optStepsVal = $("#opt-steps-val");
@@ -576,8 +624,8 @@
   }
 
 
-  $("#undo").onclick = () => { if (undo()) { render(); renderHistory(); feedback(); } };
-  $("#redo").onclick = () => { if (redo()) { render(); renderHistory(); feedback(); } };
+  $("#undo").onclick = () => { if (undo()) { refreshScores(); renderHistory(); feedback(); } };
+  $("#redo").onclick = () => { if (redo()) { refreshScores(); renderHistory(); feedback(); } };
 
   /* ---------------- color picker ---------------- */
 
