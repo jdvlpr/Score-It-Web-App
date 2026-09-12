@@ -12,7 +12,7 @@ one static page you can host on GitHub Pages.
 | --- | --- |
 | **Press a dot and swipe around the ring** | Dials that player's score up (clockwise) or down (counter-clockwise). The dot follows your finger and trails the player's color behind it; the middle shows the pending change and the player's own label shows what their total will be. Lift your finger and the dot winds back to its seat. |
 | **Tap a name or score** | Rotates it 90° — so scores face whoever is sitting on that side of the table |
-| **⚙︎ (top right)** | Add or remove players, rename them, pick any color, set the score step and sensitivity, reset scores |
+| **⚙︎ (top right)** | Add or remove players, rename them, pick any color, set the score step and sensitivity, turn haptics and the tick sound on or off, reset scores |
 | **☰ (top left)** | Score history with undo and redo |
 
 **Score step** sets how much each stop on the ring is worth — 1, 5, 10, 25 or 50 — so a

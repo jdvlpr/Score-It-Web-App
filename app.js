@@ -33,7 +33,7 @@
     settings: { steps: 12, step: 1, haptics: true, sound: false },
   });
 
-  let uid = Date.now() % 1e6;
+  let uid = Date.now();   // not modulo anything: a wrapping counter re-issues ids across sessions
   function newPlayer(name, seat) {
     return { id: "p" + (uid++).toString(36), name, color: PALETTE[PICK_ORDER[seat % 12]], score: 0, rot: 0 };
   }
@@ -51,8 +51,13 @@
       }));
       raw.log = Array.isArray(raw.log) ? raw.log.filter((e) => e && Number.isFinite(+e.delta)) : [];
       raw.cursor = Math.max(0, Math.min(raw.log.length, +raw.cursor || 0));
-      raw.settings = Object.assign({ steps: 12, step: 1, haptics: true, sound: false }, raw.settings || {});
-      if (!STEPS.includes(+raw.settings.step)) raw.settings.step = 1;
+      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false }, raw.settings || {});
+      // Numbers, not strings: syncStep compares with === and steps is a divisor.
+      st.step = STEPS.includes(+st.step) ? +st.step : 1;
+      st.steps = +st.steps >= 6 && +st.steps <= 24 ? Math.round(+st.steps / 2) * 2 : 12;
+      st.haptics = !!st.haptics;
+      st.sound = !!st.sound;
+      raw.settings = st;
       return raw;
     } catch (_) {
       return fresh();
@@ -69,6 +74,7 @@
   function save() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(writeNow, 160);
+    syncBrand();   // every change to the log passes through here, and that is all the wordmark watches
   }
   // Phones kill backgrounded tabs without warning — never leave a score in the debounce.
   addEventListener("pagehide", writeNow);
@@ -259,9 +265,6 @@
     updateCrowns();
   }
 
-  // How far behind the dot the trail keeps its full strength before easing back a shade.
-  const FADE = 360;
-
   function clearTrail() { trailEl.style.background = "none"; }
 
   // The trail runs back from the dot toward the player's seat. A conic gradient is the
@@ -271,13 +274,12 @@
     const mag = Math.abs(off);
     if (mag < 0.2) return clearTrail();
     const m = Math.min(mag, 360);
-    const fade = Math.min(m, FADE);
     const cw = off >= 0;
-    const dot = seat + off;
-    const from = (cw ? dot - m : dot) + 90;     // CSS conic 0deg is twelve o'clock
+    const from = (cw ? seat + off - m : seat + off) + 90;   // CSS conic 0deg is twelve o'clock
+    const end = m.toFixed(2);
     const stops = cw
-      ? `${faint} 0deg, ${faint} ${(m - fade).toFixed(2)}deg, ${strong} ${m.toFixed(2)}deg, transparent ${m.toFixed(2)}deg`
-      : `${strong} 0deg, ${faint} ${fade.toFixed(2)}deg, ${faint} ${m.toFixed(2)}deg, transparent ${m.toFixed(2)}deg`;
+      ? `${faint} 0deg, ${strong} ${end}deg, transparent ${end}deg`
+      : `${strong} 0deg, ${faint} ${end}deg, transparent ${end}deg`;
     trailEl.style.background = `conic-gradient(in oklch from ${from.toFixed(2)}deg, ${stops})`;
   }
 
@@ -345,8 +347,10 @@
     drawTrail(anim.seat, anim.shown, anim.strong, anim.faint);
   }
 
-  // Land the dot back in its seat and give the ring back to everybody.
+  // Land the dot back in its seat and give the ring back to everybody. This also drops the
+  // gesture: render() settles mid-swipe, and a live drag with no anim behind it would throw.
   function settle() {
+    drag = null;
     if (!anim) return;
     if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
     clearTimeout(anim.rw && anim.rw.guard);
@@ -477,12 +481,10 @@
     }
   }
 
-  function feedback(strong) {
-    // Haptics
-    if (state.settings.haptics && navigator.vibrate) {
-      navigator.vibrate(strong ? 16 : 7);
-    }
+  const buzz = (ms) => { if (state.settings.haptics && navigator.vibrate) navigator.vibrate(ms); };
 
+  function feedback(strong) {
+    buzz(strong ? 16 : 7);
     if (!state.settings.sound || !actx) return;
 
     const play = () => {
@@ -524,7 +526,7 @@
     if (!p) return;
     p.rot = (p.rot + 90) % 360;
     labelEls.get(p.id).inner.style.transform = `rotate(${p.rot}deg)`;
-    if (state.settings.haptics && navigator.vibrate) navigator.vibrate(7);
+    buzz(7);
     save();
   };
   topEl.addEventListener("click", rotate);
@@ -555,7 +557,11 @@
     scrim.classList.remove("open");
     if (!s) return;
     s.classList.remove("open");
-    setTimeout(() => { if (!sheetOpen) { scrim.hidden = true; s.hidden = true; } }, 420);
+    setTimeout(() => {
+      if (sheets[sheetOpen] === s) return;      // reopened while it was still sliding out
+      s.hidden = true;
+      if (!sheetOpen) scrim.hidden = true;      // ...but the scrim stays if another sheet took over
+    }, 420);
   }
 
   $("#open-players").onclick = () => openSheet("players");
@@ -658,7 +664,8 @@
     if (!state.log.length) {
       logEl.innerHTML = '<div class="empty">No moves yet.</div>';
     } else {
-      state.log.forEach((e, idx) => {
+      for (let idx = state.log.length - 1; idx >= 0; idx--) {   // newest first
+        const e = state.log[idx];
         const p = byId(e.playerId);
         const i = state.players.indexOf(p);
         const row = document.createElement("div");
@@ -667,8 +674,8 @@
         row.innerHTML = `<span class="bead" style="--c:${p ? p.color : "#8b8b92"}"></span>` +
           `<span class="who">${escapeHtml(p ? displayName(p, i) : "—")}</span>` +
           `<span class="delta">${fmt(e.delta)}</span>`;
-        logEl.prepend(row);
-      });
+        logEl.append(row);
+      }
     }
     $("#undo").disabled = state.cursor === 0;
     $("#redo").disabled = state.cursor >= state.log.length;
@@ -736,13 +743,15 @@
 
   /* ---------------- boot ---------------- */
 
+  // Fade the wordmark out once the board is in use, and bring it back on a reset.
+  const brandEl = $("#brand");
+  const syncBrand = () => { brandEl.style.opacity = state.log.length ? "0" : "1"; };
+
   document.addEventListener("gesturestart", (e) => e.preventDefault());
   let rAF = 0;
   window.addEventListener("resize", () => { cancelAnimationFrame(rAF); rAF = requestAnimationFrame(render); });
   window.addEventListener("orientationchange", () => setTimeout(render, 250));
 
   render();
-
-  // Fade the wordmark out once the board is in use.
-  if (state.log.length) $("#brand").style.opacity = "0";
+  syncBrand();
 })();
