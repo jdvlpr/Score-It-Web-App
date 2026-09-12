@@ -113,7 +113,7 @@
   /* ---------------- rendering ---------------- */
 
   const app = $(".app"), dial = $("#dial"), dotsEl = $("#dots"), trailEl = $("#trail"),
-        readout = $("#readout"), topEl = $("#labels-top"), botEl = $("#labels-bottom");
+        topEl = $("#labels-top"), botEl = $("#labels-bottom");
 
   const labelEls = new Map();
   const dotEls = new Map();
@@ -187,16 +187,28 @@
       const sc = document.createElement("span");
       sc.className = "score";
       sc.textContent = s.p.score;
-      inner.append(nm, sc);
+      // The live swipe value rides above the running total, which shrinks out of its way.
+      const dl = document.createElement("span");
+      dl.className = "delta";
+      dl.setAttribute("aria-live", "polite");
+      const stack = document.createElement("span");
+      stack.className = "score-stack";
+      stack.append(sc, dl);
+      inner.append(nm, stack);
       el.appendChild(inner);
       host.appendChild(el);
-      labelEls.set(s.p.id, { el, score: sc, inner });
+      labelEls.set(s.p.id, { el, score: sc, delta: dl, inner });
     }
   }
 
   function setScoreText(id, text) {
     const l = labelEls.get(id);
     if (l) l.score.textContent = text;
+  }
+
+  function setDeltaText(id, text) {
+    const l = labelEls.get(id);
+    if (l) l.delta.textContent = text;
   }
 
   // How far behind the dot the trail keeps its full strength before easing back a shade.
@@ -218,7 +230,7 @@
     const stops = cw
       ? `${faint} 0deg, ${faint} ${(m - fade).toFixed(2)}deg, ${strong} ${m.toFixed(2)}deg, transparent ${m.toFixed(2)}deg`
       : `${strong} 0deg, ${faint} ${fade.toFixed(2)}deg, ${faint} ${m.toFixed(2)}deg, transparent ${m.toFixed(2)}deg`;
-    trailEl.style.background = `conic-gradient(from ${from.toFixed(2)}deg, ${stops})`;
+    trailEl.style.background = `conic-gradient(in oklch from ${from.toFixed(2)}deg, ${stops})`;
   }
 
   // Only the active dot ever leaves its seat, and only by a transform — the seat
@@ -237,7 +249,7 @@
 
   let drag = null;      // the gesture: what the finger is doing
   let anim = null;      // the picture: where the dot actually is on screen
-  let readoutTimer = 0, rafId = 0;
+  let rafId = 0;
 
   const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -295,6 +307,7 @@
     labelEls.get(anim.id)?.el.classList.remove("is-active");
     clearTrail();
     dial.classList.remove("is-dragging");
+    app.classList.remove("is-dragging");
     anim = null;
   }
 
@@ -320,12 +333,12 @@
       faint: `color-mix(in srgb, ${p.color} 0%, transparent)`,
     };
     dial.classList.add("is-dragging");
-    dial.style.setProperty("--live-color", p.color);
+    app.classList.add("is-dragging");   // every other player's score steps back
     dot.classList.add("is-active");
     labelEls.get(p.id)?.el.classList.add("is-active");
-    clearTimeout(readoutTimer);
-    showReadout(0);
-    setScoreText(p.id, p.score);   // the label previews the resulting total, not the delta
+    labelEls.get(p.id)?.score.classList.remove("pop");   // a spent pop would keep its own transform-origin
+    setDeltaText(p.id, fmt(0));
+    setScoreText(p.id, p.score);   // the total keeps previewing the result, under the delta
     clearTrail();
   });
 
@@ -343,7 +356,7 @@
     if (next === drag.pending) return;
     drag.pending = next;
     const p = byId(drag.id);
-    showReadout(next * state.settings.step);
+    setDeltaText(drag.id, fmt(next * state.settings.step));
     setScoreText(drag.id, p.score + next * state.settings.step);
     feedback();
   }, { passive: false });
@@ -356,16 +369,16 @@
     if (delta) {
       commit(d.id, delta);
       feedback(true);
-      showReadout(delta);
-      readoutTimer = setTimeout(() => readout.classList.remove("show"), 620);
-    } else {
-      readout.classList.remove("show");
     }
     const p = byId(d.id);
+    const l = labelEls.get(d.id);
     setScoreText(d.id, p ? p.score : 0);
-    labelEls.get(d.id)?.score.classList.remove("pop");
-    void labelEls.get(d.id)?.score.offsetWidth;
-    if (delta) labelEls.get(d.id)?.score.classList.add("pop");
+    // The label hands the number back at release, not when the dot finishes winding home.
+    l?.el.classList.remove("is-active");
+    app.classList.remove("is-dragging");
+    l?.score.classList.remove("pop");
+    void l?.score.offsetWidth;
+    if (delta) l?.score.classList.add("pop");
     // The score is already banked; the dot just winds itself home. Everyone else stays
     // faded until it lands, so it never flies through a dot that is fading back in.
     if (anim && !reduced.matches && Math.abs(anim.shown) > 0.5) {
@@ -391,11 +404,6 @@
     render();
     if (sheetOpen === "history") renderHistory();
   });
-
-  function showReadout(v) {
-    readout.textContent = fmt(v);
-    readout.classList.add("show");
-  }
 
   /* haptics + tick */
   let actx = null;

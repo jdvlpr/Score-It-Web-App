@@ -108,14 +108,18 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   place-items: center;
   padding: 0;
   touch-action: manipulation;
+  transition: opacity .26s var(--ease);
 }
+
+/* Mid-swipe the board belongs to one player: everybody else steps back. */
+.app.is-dragging .label { opacity: .14; }
+.app.is-dragging .label.is-active { opacity: 1; }
 
 .label-inner {
   width: var(--label-span);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
   transition: transform .42s var(--ease);
   will-change: transform;
 }
@@ -131,18 +135,55 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   opacity: .92;
 }
 
-.label .score {
+/* The running total sits in flow and sets the height; the swipe value is laid over it,
+   so the two always share one position. Digits are set solid (line-height = cap height),
+   which makes the box hug the ink — every gap below is then a real optical gap, and the
+   stack's own margin and padding are what space and re-centre the three lines. */
+.score-stack {
+  position: relative;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  margin-top: calc(var(--score-fs) * .181);      /* name baseline -> digit cap: .243em */
+  padding-bottom: calc(var(--score-fs) * .069);  /* balances the name's own top bearing */
+  transition: margin-top .34s var(--ease), padding-bottom .34s var(--ease);
+}
+
+.label .score,
+.label .delta {
   font-size: var(--score-fs);
   font-weight: 800;
   letter-spacing: -.035em;
-  line-height: 1.05;
   font-variant-numeric: tabular-nums;
-  transition: transform .34s var(--ease), opacity .2s linear;
+  white-space: nowrap;
+  line-height: .72;   /* set solid: the box hugs the digits */
+  transform-origin: 50% 0;
 }
 
-.label.is-active .score { transform: scale(1.06); }
-.label.is-dim { opacity: .3; }
-.label .score.pop { animation: pop .42s var(--ease); }
+.label .score { transition: transform .34s var(--ease), opacity .18s linear; }
+
+.label .delta {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  opacity: 0;
+  transform: scale(.5);
+  transition: opacity 0s linear;   /* leaving: at once — two big numbers in one spot only ever read as mush */
+  pointer-events: none;
+}
+
+/* The swipe value takes the total's place, big; the total shrinks and fades beneath it.
+   Name, swipe value and total end up one equal gap apart, centred in the label as a group. */
+.label.is-active .delta { opacity: 1; transform: scale(1); transition: transform .34s var(--ease), opacity .2s linear; }
+.label.is-active .score { opacity: .42; transform: translateY(.873em) scale(.28); }
+.label.is-active .score-stack {
+  margin-top: calc(var(--score-fs) * .078);      /* both gaps land on .14em of ink */
+  padding-bottom: calc(var(--score-fs) * .385);  /* ...and the trio centres itself in the label */
+}
+
+.label .score.pop { transform-origin: 50% 50%; animation: pop .42s var(--ease); }
 
 @keyframes pop {
   0%   { transform: scale(1); }
@@ -220,23 +261,6 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .dial.is-dragging .dot { opacity: 0; }   /* the ring belongs to one player mid-swipe */
 .dial.is-dragging .dot.is-active { opacity: 1; }
 .dial.is-dragging .dot.is-active .dot-fill { transform: scale(1.2); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 22%, transparent); }
-
-.readout {
-  position: absolute;
-  inset: 22%;
-  display: grid;
-  place-items: center;
-  font-size: 21cqw;
-  font-weight: 800;
-  letter-spacing: -.05em;
-  font-variant-numeric: tabular-nums;
-  color: var(--live-color, var(--text));
-  opacity: 0;
-  transform: scale(.82);
-  transition: opacity .2s linear, transform .32s var(--ease);
-  pointer-events: none;
-}
-.readout.show { opacity: 1; transform: scale(1); }
 
 /* ---------- sheets ---------- */
 
