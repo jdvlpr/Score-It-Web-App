@@ -362,9 +362,9 @@
   dial.addEventListener("pointerdown", (e) => {
     const dot = e.target.closest(".dot");
     if (!dot || drag) return;
-    unlockAudio();
     const p = byId(dot.dataset.id);
     if (!p) return;
+    unlockAudio();
     e.preventDefault();
     settle();                                  // a rewind still in flight lands now
     try { dial.setPointerCapture(e.pointerId); } catch (_) {}
@@ -457,54 +457,63 @@
 
   /* haptics + tick */
   let actx = null;
+  let audioReady = null;
 
   function unlockAudio() {
+    if (!state.settings.sound) return;
 
     try {
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-
-      if (actx.state === "suspended") {
-        actx.resume();
+      if (!actx) {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
       }
 
-      // Tiny silent sound started directly inside the user's gesture.
-      const o = actx.createOscillator();
-      const g = actx.createGain();
-
-      g.gain.value = 0.00001;
-      o.connect(g).connect(actx.destination);
-      o.start();
-      o.stop(actx.currentTime + 0.01);
-    } catch (_) {}
+      if (actx.state === "running") {
+        audioReady = Promise.resolve();
+      } else {
+        audioReady = actx.resume();
+      }
+    } catch (_) {
+      audioReady = null;
+    }
   }
 
   function feedback(strong) {
-    // Haptics: Will silently fail on iOS Safari (unsupported)
-    if (state.settings.haptics && navigator.vibrate) navigator.vibrate(strong ? 16 : 7);
-    if (!state.settings.sound) return;
-    try {
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    // Haptics
+    if (state.settings.haptics && navigator.vibrate) {
+      navigator.vibrate(strong ? 16 : 7);
+    }
 
-      // CRITICAL FOR IOS SAFARI: Unlock the suspended context
-      if (actx.state === 'suspended') {
-        actx.resume();
-      }
+    if (!state.settings.sound || !actx) return;
 
-      const t = actx.currentTime;
-      const o = actx.createOscillator();
-      const g = actx.createGain();
+    const play = () => {
+      try {
+        if (actx.state !== "running") return;
 
-      o.type = "sine";
-      o.frequency.value = strong ? 440 : 680;
+        const t = actx.currentTime;
+        const o = actx.createOscillator();
+        const g = actx.createGain();
 
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(strong ? 0.16 : 0.09, t + 0.006);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+        o.type = "sine";
+        o.frequency.value = strong ? 440 : 680;
 
-      o.connect(g).connect(actx.destination);
-      o.start(t);
-      o.stop(t + 0.09);
-    } catch (_) {}
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(
+          strong ? 0.16 : 0.09,
+          t + 0.006
+        );
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+
+        o.connect(g).connect(actx.destination);
+        o.start(t);
+        o.stop(t + 0.09);
+      } catch (_) {}
+    };
+
+    if (actx.state === "running") {
+      play();
+    } else if (audioReady) {
+      audioReady.then(play).catch(() => {});
+    }
   }
 
   /* tap a name to rotate it toward whoever is sitting there */
@@ -611,7 +620,14 @@
   const stepsLabel = () => (optStepsVal.textContent = state.settings.steps + " stops");
   stepsLabel();
   optH.onchange = () => { state.settings.haptics = optH.checked; save(); };
-  optS.onchange = () => { state.settings.sound = optS.checked; if (optS.checked) feedback(); save(); };
+  optS.onchange = () => {
+    state.settings.sound = optS.checked;
+    if (optS.checked) {
+      unlockAudio();
+      feedback();
+    }
+    save();
+  };
   optSteps.oninput = () => { state.settings.steps = +optSteps.value; stepsLabel(); save(); };
 
   const stepSeg = $("#opt-step");
