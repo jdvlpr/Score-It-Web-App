@@ -457,43 +457,39 @@
   /* haptics + tick */
     let actx = null;
 
-    // 1. Create a function to unlock audio on the first valid user interaction
+    // Unlock the Web Audio API on the very first touch,
+    // regardless of the user's sound setting.
     const unlockAudio = () => {
-      if (!state.settings.sound) return;
       try {
         actx = actx || new (window.AudioContext || window.webkitAudioContext)();
         if (actx.state === 'suspended') actx.resume();
 
-        // Play a completely silent oscillator for 1ms to fully unlock iOS audio
         const osc = actx.createOscillator();
         const gain = actx.createGain();
-        gain.gain.value = 0;
+        gain.gain.value = 0; // Completely silent
         osc.connect(gain).connect(actx.destination);
         osc.start(0);
         osc.stop(actx.currentTime + 0.001);
 
-        // Once unlocked, clean up these listeners so they don't fire again
-        window.removeEventListener("pointerdown", unlockAudio, true);
-        window.removeEventListener("touchstart", unlockAudio, true);
-        window.removeEventListener("keydown", unlockAudio, true);
+        // Once successfully unlocked, remove the listeners
+        ["touchstart", "touchend", "click", "keydown"].forEach(e =>
+          document.removeEventListener(e, unlockAudio, true)
+        );
       } catch (_) {}
     };
 
-    // 2. Bind the unlocker globally to catch the very first touch/click
-    window.addEventListener("pointerdown", unlockAudio, true);
-    window.addEventListener("touchstart", unlockAudio, true);
-    window.addEventListener("keydown", unlockAudio, true);
+    // iOS explicitly trusts these events for audio (pointer events are unreliable).
+    ["touchstart", "touchend", "click", "keydown"].forEach(e =>
+      document.addEventListener(e, unlockAudio, true)
+    );
 
     function feedback(strong) {
-      // Haptics: Will silently fail on iOS Safari (unsupported)
       if (state.settings.haptics && navigator.vibrate) navigator.vibrate(strong ? 16 : 7);
-      if (!state.settings.sound) return;
+      if (!state.settings.sound) return; // Only play if enabled
+
       try {
         actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-
-        if (actx.state === 'suspended') {
-          actx.resume();
-        }
+        if (actx.state === 'suspended') actx.resume();
 
         const t = actx.currentTime;
         const o = actx.createOscillator();
