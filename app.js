@@ -456,15 +456,51 @@
 
   /* haptics + tick */
   let actx = null;
+  let audioUnlocked = false;
+
+  // 1. Create a function to explicitly unlock the audio context
+  function primeAudioContext() {
+    if (audioUnlocked) return;
+
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+
+      if (actx.state === 'suspended') {
+        actx.resume();
+      }
+
+      // Play a silent, empty buffer to fully force the unlock on iOS
+      const buffer = actx.createBuffer(1, 1, 22050);
+      const source = actx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(actx.destination);
+      source.start(0);
+
+      audioUnlocked = true;
+
+      // Clean up event listeners once unlocked
+      window.removeEventListener('touchstart', primeAudioContext);
+      window.removeEventListener('pointerdown', primeAudioContext);
+      window.removeEventListener('click', primeAudioContext);
+    } catch (e) {
+      console.error("Audio unlock failed:", e);
+    }
+  }
+
+  // 2. Attach the unlocker to the first user interactions
+  window.addEventListener('touchstart', primeAudioContext, { once: true });
+  window.addEventListener('pointerdown', primeAudioContext, { once: true });
+  window.addEventListener('click', primeAudioContext, { once: true });
 
   function feedback(strong) {
     // Haptics: Will silently fail on iOS Safari (unsupported)
     if (state.settings.haptics && navigator.vibrate) navigator.vibrate(strong ? 16 : 7);
     if (!state.settings.sound) return;
+
     try {
+      // Ensure context exists just in case feedback is called before a tap
       actx = actx || new (window.AudioContext || window.webkitAudioContext)();
 
-      // CRITICAL FOR IOS SAFARI: Unlock the suspended context
       if (actx.state === 'suspended') {
         actx.resume();
       }
