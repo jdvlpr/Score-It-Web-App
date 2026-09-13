@@ -27,10 +27,10 @@
   /* ---------------- state ---------------- */
 
   const fresh = () => ({
-    players: [newPlayer("Player 1", 0), newPlayer("Player 2", 1)],
+    players: [newPlayer("Player 1", 0), newPlayer("Player 2", 1), newPlayer("Player 3", 2), newPlayer("Player 4", 3)],
     log: [],
     cursor: 0,
-    settings: { steps: 12, step: 1, haptics: true, sound: false },
+    settings: { steps: 12, step: 1, haptics: true, sound: true },
   });
 
   let uid = Date.now();   // not modulo anything: a wrapping counter re-issues ids across sessions
