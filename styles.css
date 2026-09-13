@@ -120,7 +120,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 
 /* Mid-swipe the board belongs to one player: everybody else steps back. */
-.app.is-dragging .label { opacity: .14; }
+.app.is-dragging .label { opacity: 0; }
 .app.is-dragging .label.is-active { opacity: 1; }
 
 .label-inner {
