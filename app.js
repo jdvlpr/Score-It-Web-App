@@ -126,29 +126,147 @@
 
   /* ---------------- rendering ---------------- */
 
-  const app = $(".app"), dial = $("#dial"), dotsEl = $("#dots"), trailEl = $("#trail"),
+  const app = $(".app"), dial = $("#dial"), barEl = $(".topbar"),
+        dotsEl = $("#dots"), trailEl = $("#trail"),
         topEl = $("#labels-top"), botEl = $("#labels-bottom");
 
   const labelEls = new Map();
   const dotEls = new Map();
 
+  /* --- pure sizing: tools/check-sizes.mjs evaluates this block on its own --- */
+
+  // [label height, score size, name size] at scale 1, by player count.
+  function baseSize(n) {
+    return n <= 2 ? [150, 88, 17] : n <= 4 ? [128, 78, 16]
+         : n <= 6 ? [112, 71, 15] : n <= 8 ? [98, 65, 14] : [88, 60, 13];
+  }
+
+  // Columns for one row of labels. A group gets a single clean row whenever the
+  // width is there: on a wide screen that is what turns label rows back into dial
+  // height, which is the axis that is actually scarce.
+  function colsFor(len, rowW, cellW) {
+    if (len <= 0) return 1;
+    if (len <= 3) return len;
+    const fit = Math.max(1, Math.floor(rowW / (cellW + 4)));
+    if (len <= fit) return len;
+    if (len === 4) return 2;   // 2x2 reads better than 3 + 1
+    return Math.min(3, fit);
+  }
+
+  // Totals are tabular, so the widest one on the board sets the size for everybody —
+  // a scoreboard whose numbers are different sizes reads as broken.
+  //
+  // 0.65em is what one of those digits costs. Measured out of SFNS.ttf rather than
+  // guessed: a tabular figure at weight 800 advances .661em at display optical sizes
+  // and .680em at text ones, and the -.035em tracking on .score comes back off. The
+  // text end is the wide end, so that is the one to budget for. A minus sign is
+  // narrower than a digit, so counting it as one is on the safe side. The 10px is the
+  // gap left between two columns of numbers.
+  const DIGIT_EM = 0.65;
+  function fitScore(fs, colW, chars) {
+    return Math.max(12, Math.min(fs, Math.floor((colW - 10) / (Math.max(1, chars) * DIGIT_EM))));
+  }
+
+  // Everything the layout needs, from the viewport and the two label groups.
+  // flexH is the height the label rows and the dial share between them.
+  // padX is the column's own left + right padding, safe-area insets included; chars is
+  // the length of the longest total on the board.
+  function metrics(vw, vh, nTop, nBot, flexH, padX, chars) {
+    const n = nTop + nBot;
+    // The dial is a square in a height-bound column, so the column's width follows
+    // the height it has to fill rather than the width of the screen it sits on.
+    // Past 920px a bigger donut stops being easier to swipe and starts being a walk.
+    const appW = Math.min(vw, Math.max(560, Math.min(920, Math.round(vh * 0.82))));
+    const rowW = Math.max(200, appW - padX);
+    const base = baseSize(n);
+    // Type is measured against a 360x780 phone and grows with the smaller axis, so a
+    // tall narrow window never gets numbers too wide for it.
+    const k = Math.max(0.72, Math.min(1.45, Math.min(vh / 780, vw / 360)));
+    const labelW = Math.round(base[0] * k);
+    const cols = [colsFor(nTop, rowW, labelW), colsFor(nBot, rowW, labelW)];
+    const rows = Math.ceil(nTop / cols[0]) + Math.ceil(nBot / cols[1]);
+    // Labels never take much more than half the column — the dial is the point. Only
+    // the height is capped: label-inner keeps its full width, so a short window shrinks
+    // the digits instead of clipping the names. 0.56 is where the guard starts to bite
+    // on a small phone at eight players, which is the layout it was set against.
+    const span = rows ? Math.min(labelW, Math.floor((flexH * 0.56) / rows)) : labelW;
+    const kEff = span / base[0];
+    // The height above says how big a total may be; the column says how big it can be.
+    const colW = rowW / Math.max(cols[0], cols[1]);
+    const scoreFs = Math.round(base[1] * kEff);
+    return {
+      appW, cols, rows, span, labelW, colW, scoreFs,
+      scoreFit: fitScore(scoreFs, colW, chars),
+      nameFs: Math.round(base[2] * kEff),
+      dial: Math.max(0, Math.min(rowW, flexH - rows * span)),
+    };
+  }
+
+  /* --- end pure sizing --- */
+
+  // The longest total currently on the board, in characters — a leading minus counts.
+  function scoreChars() {
+    let c = 1;
+    for (const p of state.players) c = Math.max(c, String(p.score).length);
+    return c;
+  }
+
+  // A total gaining a digit has to make room for itself or the columns run together.
+  // Only the type is touched: rebuilding the labels here would swallow the score's pop.
+  let fit = null;
+  function fitType() {
+    const chars = scoreChars();
+    if (!fit || chars === fit.chars) return;
+    fit.chars = chars;
+    document.documentElement.style.setProperty("--score-fs", fitScore(fit.fs, fit.colW, chars) + "px");
+  }
+
+  // What the shell leaves for everything else. The height is derived from the shell
+  // rather than measured off the labels, so it doesn't move when the labels resize;
+  // the padding is read rather than assumed, because the safe-area insets are in it.
+  function shell() {
+    const cs = getComputedStyle(app);
+    const gap = parseFloat(cs.rowGap) || 0;   // four children, so three gaps
+    const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    return {
+      flexH: Math.max(160, app.clientHeight - padY - barEl.offsetHeight - gap * 3),
+      padX: parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight),
+    };
+  }
+
 
   function render() {
     settle();                      // never rebuild the dots out from under a live gesture
+    const box = shell();           // read before anything below writes a size back
     const n = state.players.length;
     const seats = state.players.map((p, i) => ({ p, i, a: seatAngle(i, n) }));
 
-    // Sizing: dots shrink to fit the ring, labels shrink to fit the screen.
-    const slot = C / n;
-    const dotPct = Math.max(6.5, Math.min(16, slot * 0.74));
-    const k = Math.max(0.72, Math.min(1.12, window.innerHeight / 780));
-    const size = n <= 2 ? [150, 88, 17] : n <= 4 ? [128, 78, 16]
-               : n <= 6 ? [112, 71, 15] : n <= 8 ? [98, 65, 14] : [88, 60, 13];
+    // Split the seats into the row above the dial and the row below, by where they sit.
+    const sin = (s) => Math.sin((s.a * Math.PI) / 180);
+    const cos = (s) => Math.cos((s.a * Math.PI) / 180);
+    const top = [], bottom = [], level = [];
+    for (const s of seats) (sin(s) < -1e-6 ? top : sin(s) > 1e-6 ? bottom : level).push(s);
+    // Seats exactly level with the hub belong to neither row — deal them out to keep the rows even.
+    level.sort((a, b) => cos(b) - cos(a));
+    for (const s of level) (top.length <= bottom.length ? top : bottom).push(s);
+    const leftToRight = (a, b) => cos(a) - cos(b);
+    top.sort(leftToRight);
+    bottom.sort(leftToRight);
+
+    // Sizing: dots shrink to fit the ring; the column, the labels and the type all
+    // grow with the screen, so a tablet or a desktop gets a bigger board, not a
+    // phone-sized one parked in the middle of it.
+    const dotPct = Math.max(6.5, Math.min(16, (C / n) * 0.74));
+    const chars = scoreChars();
+    const m = metrics(window.innerWidth, window.innerHeight, top.length, bottom.length, box.flexH, box.padX, chars);
+    fit = { fs: m.scoreFs, colW: m.colW, chars };
     const root = document.documentElement.style;
     root.setProperty("--dot-pct", dotPct.toFixed(2));
-    root.setProperty("--label-span", Math.round(size[0] * k) + "px");
-    root.setProperty("--score-fs", Math.round(size[1] * k) + "px");
-    root.setProperty("--name-fs", Math.round(size[2] * k) + "px");
+    root.setProperty("--app-w", m.appW + "px");
+    root.setProperty("--label-span", m.span + "px");
+    root.setProperty("--label-w", m.labelW + "px");
+    root.setProperty("--score-fs", m.scoreFit + "px");
+    root.setProperty("--name-fs", m.nameFs + "px");
 
     dotsEl.textContent = "";
     dotEls.clear();
@@ -168,25 +286,13 @@
       dotEls.set(s.p.id, b);
     }
 
-    // Split the seats into the row above the dial and the row below, by where they sit.
-    const sin = (s) => Math.sin((s.a * Math.PI) / 180);
-    const cos = (s) => Math.cos((s.a * Math.PI) / 180);
-    const top = [], bottom = [], level = [];
-    for (const s of seats) (sin(s) < -1e-6 ? top : sin(s) > 1e-6 ? bottom : level).push(s);
-    // Seats exactly level with the hub belong to neither row — deal them out to keep the rows even.
-    level.sort((a, b) => cos(b) - cos(a));
-    for (const s of level) (top.length <= bottom.length ? top : bottom).push(s);
-    const leftToRight = (a, b) => cos(a) - cos(b);
-    top.sort(leftToRight);
-    bottom.sort(leftToRight);
-    fillLabels(topEl, top);
-    fillLabels(botEl, bottom);
+    fillLabels(topEl, top, m.cols[0]);
+    fillLabels(botEl, bottom, m.cols[1]);
     updateCrowns();
     clearTrail();
   }
 
-  function fillLabels(host, group) {
-    const cols = group.length <= 3 ? Math.max(1, group.length) : group.length === 4 ? 2 : 3;
+  function fillLabels(host, group, cols) {
     for (const s of group) {
       const el = document.createElement("button");
       el.className = "label";
@@ -261,6 +367,7 @@
   // Scores changed but the board did not: reuse the labels rather than rebuilding them,
   // so the crown can transition between players instead of snapping.
   function refreshScores() {
+    fitType();
     state.players.forEach((p) => setScoreText(p.id, p.score));
     updateCrowns();
   }
@@ -410,6 +517,8 @@
     e.preventDefault();
     if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 10) drag.moved = true;
     const r = dial.getBoundingClientRect();
+    drag.rad = r.width / 2;   // the window can be resized mid-drag on a desktop
+    anim.rr = r.width * (R / 100);
     advance(drag, e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
     anim.shown = drag.acc;
     paint();
@@ -433,6 +542,7 @@
     }
     const p = byId(d.id);
     const l = labelEls.get(d.id);
+    fitType();   // the swipe may have pushed this total into another digit
     setScoreText(d.id, p ? p.score : 0);
     // The label hands the number back at release, not when the dot finishes winding home.
     l?.el.classList.remove("is-active");

@@ -29,6 +29,37 @@ One swipe is one entry in the history, so undo takes back the whole move rather
 than unwinding it a point at a time. Everything is stored in `localStorage` on
 the device — the game is still there when you come back.
 
+## Any screen
+
+It is built phone-first but it is not stuck there. `metrics()` in `app.js` takes the
+viewport and the two rows of labels and returns the whole layout: how wide the column
+is, how tall a label is, how many columns each row gets, and the type sizes. The
+column's width follows the screen's *height*, because the dial is a square in a
+height-bound stack — on a 27" display it opens out to a 892px ring with 128px digits,
+and it stops at 920px, past which a bigger ring is a longer reach rather than an easier
+one. Given the width, a row of labels collapses to a single line instead of wrapping,
+which is what buys the dial its height back on a landscape iPad or a laptop. Labels are
+held to a little over half the column so the dial always wins the rest, and only their
+*height* is capped — the name keeps its full width, so a short window shrinks the digits
+rather than clipping the names.
+
+Two things then size the totals. The label's height says how big a number *may* be; the
+column's width says how big it *can* be. Digits are tabular, so the longest total on the
+board sets the size for everyone — a scoreboard whose numbers are different sizes reads
+as broken — and a total that gains a digit re-fits the type on the spot rather than
+running into its neighbours. Only the type is touched there, because rebuilding the
+labels would swallow the score's pop.
+
+`metrics()` is pure, and `tools/check-sizes.mjs` lifts it straight out of `app.js` and
+prints the resulting layout for a spread of phones, tablets and desktops at 1–12 players
+and at 1-, 3- and 5-digit totals. It cannot drift from what ships, it fails loudly if a
+layout would collide, and it is the fastest way to see what a change to the sizing does
+everywhere at once.
+
+Hover states are behind `(hover: hover) and (pointer: fine)`, so a tablet never gets a
+dot stuck in its hover state after a tap. Above 700px the sheets lift off the bottom
+edge and float with all four corners rounded.
+
 ## Run it locally
 
 It is plain HTML, CSS and JavaScript; no install, no dependencies.
@@ -66,7 +97,8 @@ browser chrome.
 index.html      markup and the inline SVG ring
 styles.css      the whole theme; sizes come from CSS custom properties
 app.js          state, the swipe engine, rendering, persistence
-tools/          regenerates the PNG icons (node tools/make-icons.mjs)
+tools/          node tools/make-icons.mjs   regenerates the PNG icons
+                node tools/check-sizes.mjs  prints the layout table per screen
 ```
 
 Two details worth knowing if you edit `app.js`:
