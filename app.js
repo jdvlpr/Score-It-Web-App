@@ -270,16 +270,18 @@
   // The trail runs back from the dot toward the player's seat. A conic gradient is the
   // only thing that can fade *along* an arc; the mask makes it a band. Past a full lap
   // it simply stays a closed ring rather than starting the sweep over.
-  function drawTrail(seat, off, strong, faint) {
+  function drawTrail(seat, off) {
     const mag = Math.abs(off);
     if (mag < 0.2) return clearTrail();
+    anim.strongPercent = Math.min(35 + mag/50, 100);
+    anim.faintPercent = Math.min(0 + mag/360, 30);
     const m = Math.min(mag, 360);
     const cw = off >= 0;
     const from = (cw ? seat + off - m : seat + off) + 90;   // CSS conic 0deg is twelve o'clock
     const end = m.toFixed(2);
     const stops = cw
-      ? `${faint} 0deg, ${strong} ${end}deg, transparent ${end}deg`
-      : `${strong} 0deg, ${faint} ${end}deg, transparent ${end}deg`;
+      ? `${anim.faint} 0deg, ${anim.strong} ${end}deg, transparent ${end}deg`
+      : `${anim.strong} 0deg, ${anim.faint} ${end}deg, transparent ${end}deg`;
     trailEl.style.background = `conic-gradient(in oklch from ${from.toFixed(2)}deg, ${stops})`;
   }
 
@@ -344,7 +346,7 @@
 
   function paint() {
     placeDot(anim.id, anim.seat, anim.shown, anim.rr);
-    drawTrail(anim.seat, anim.shown, anim.strong, anim.faint);
+    drawTrail(anim.seat, anim.shown);
   }
 
   // Land the dot back in its seat and give the ring back to everybody. This also drops the
@@ -382,8 +384,14 @@
     };
     anim = {
       id: p.id, seat, shown: 0, rw: null, rr: r.width * (R / 100),
-      strong: `color-mix(in srgb, ${p.color} 35%, transparent)`,
-      faint: `color-mix(in srgb, ${p.color} 0%, transparent)`,
+      strongPercent: 35,
+      get strong() {
+          return `color-mix(in srgb, ${p.color} ${this.strongPercent}%, transparent)`;
+      },
+      faintPercent: 0,
+      get faint() {
+          return `color-mix(in srgb, ${p.color} ${this.faintPercent}%, transparent)`;
+      },
     };
     dial.classList.add("is-dragging");
     app.classList.add("is-dragging");   // every other player's score steps back
