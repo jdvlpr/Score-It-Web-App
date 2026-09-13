@@ -273,8 +273,9 @@
   function drawTrail(seat, off) {
     const mag = Math.abs(off);
     if (mag < 0.2) return clearTrail();
-    anim.strongPercent = Math.min(35 + mag/50, 100);
-    anim.faintPercent = Math.min(0 + mag/360, 30);
+    anim.strongPercent = Math.min(35 + mag/20, 100);
+    anim.faintPercent = Math.min(0 + mag / 360, 40);
+    console.log({s: anim.strongPercent, f:anim.faintPercent})
     const m = Math.min(mag, 360);
     const cw = off >= 0;
     const from = (cw ? seat + off - m : seat + off) + 90;   // CSS conic 0deg is twelve o'clock

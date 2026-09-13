@@ -32,9 +32,47 @@
 
   <div class="stage">
     <div class="dial" id="dial">
-      <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
-        <circle class="ring-track" id="ring-track" cx="50" cy="50" r="38"></circle>
-      </svg>
+        <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
+          <defs>
+              <filter
+                id="grain"
+                x="-50%"
+                y="-50%"
+                width="200%"
+                height="200%"
+              >
+                <feTurbulence
+                  type="fractalNoise"
+                  baseFrequency="3"
+                  numOctaves="1"
+                  seed="4"
+                />
+                <feColorMatrix type="saturate" values="0" />
+                <feComponentTransfer>
+                  <feFuncA type="table" tableValues="0 0.04" />
+                </feComponentTransfer>
+              </filter>
+          </defs>
+
+          <circle
+            class="ring-track"
+            id="ring-track"
+            cx="50"
+            cy="50"
+            r="38"
+          />
+
+          <circle
+            cx="50"
+            cy="50"
+            r="38"
+            fill="none"
+            stroke="white"
+            stroke-width="3"
+            filter="url(#grain)"
+            opacity="0.8"
+          />
+        </svg>
 
       <div class="trail" id="trail"></div>
       <div class="dots" id="dots"></div>
