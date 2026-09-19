@@ -349,7 +349,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: transform .42s var(--ease);
   padding-bottom: env(safe-area-inset-bottom);
 }
-.sheet.open { transform: translateY(0); }
+.sheet.open { transform: translateY(var(--drag-y, 0px)); }
+/* Mid-drag the sheet is pinned to the finger, not the .42s ease. */
+.sheet.dragging { transition: none; }
 
 .sheet-grab {
   width: 38px;
@@ -358,6 +360,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   background: #34343a;
   margin: 9px auto 2px;
   flex: 0 0 auto;
+  touch-action: none;   /* always draggable, never a scroll/zoom gesture */
 }
 
 .sheet-head {
@@ -593,7 +596,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
     box-shadow: 0 24px 70px rgba(0, 0, 0, .62);
     transform: translateY(calc(101% + 20px));
   }
-  .sheet.open { transform: translateY(0); }
+  .sheet.open { transform: translateY(var(--drag-y, 0px)); }
 }
 
 /* Mice and trackpads only: on a touch screen these stick after a tap. */

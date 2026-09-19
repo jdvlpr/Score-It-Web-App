@@ -663,6 +663,7 @@
     const s = sheets[which];
     scrim.hidden = false;
     s.hidden = false;
+    s.style.removeProperty("--drag-y");   // a sheet closed mid-drag leaves this behind
     void s.offsetWidth;            // flush styles synchronously so the slide-in has a start value
     scrim.classList.add("open");
     s.classList.add("open");
@@ -687,6 +688,62 @@
   scrim.onclick = closeSheet;
   document.querySelectorAll("[data-close]").forEach((b) => (b.onclick = closeSheet));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closePicker(); closeSheet(); } });
+
+  // Swipe-down-to-dismiss, like a native sheet. Always draggable from the grab handle
+  // and header; draggable from the body too, but only once it's scrolled to the top —
+  // otherwise the gesture is just a normal scroll.
+  function initSheetDrag(s) {
+    const body = s.querySelector(".sheet-body");
+    let pid = null, tracking = false, dragging = false, startX = 0, startY = 0, dy = 0;
+
+    s.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      if (e.target.closest("button, input")) return;   // don't steal the slider, switches, Done, etc.
+      pid = e.pointerId;
+      tracking = true;
+      dragging = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      dy = 0;
+    });
+
+    s.addEventListener("pointermove", (e) => {
+      if (!tracking || e.pointerId !== pid) return;
+      const curDx = e.clientX - startX;
+      const curDy = e.clientY - startY;
+
+      if (!dragging) {
+        if (Math.abs(curDy) < 6 || Math.abs(curDx) > Math.abs(curDy)) return;
+        if (curDy < 0) { tracking = false; return; }   // swiping up isn't our gesture
+        const fromHandle = e.target.closest(".sheet-grab, .sheet-head");
+        if (!fromHandle && body && body.scrollTop > 0) { tracking = false; return; }   // let it scroll
+        dragging = true;
+        s.classList.add("dragging");
+        try { s.setPointerCapture(pid); } catch (_) {}
+      }
+
+      dy = curDy < 0 ? curDy / 3 : curDy;   // a little resistance past fully open
+      s.style.setProperty("--drag-y", `${dy}px`);
+      e.preventDefault();
+    }, { passive: false });
+
+    const endDrag = (e) => {
+      if (!tracking || e.pointerId !== pid) return;
+      tracking = false;
+      if (!dragging) return;
+      dragging = false;
+      s.classList.remove("dragging");
+      if (dy > Math.min(120, s.offsetHeight * 0.3)) {
+        closeSheet();
+      } else {
+        s.style.setProperty("--drag-y", "0px");
+      }
+    };
+    s.addEventListener("pointerup", endDrag);
+    s.addEventListener("pointercancel", endDrag);
+  }
+  initSheetDrag(sheets.players);
+  initSheetDrag(sheets.history);
 
   /* players sheet */
   const rowsEl = $("#player-rows");
