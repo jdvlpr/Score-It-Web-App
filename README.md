@@ -91,12 +91,23 @@ files as-is.
 On a phone, use **Share → Add to Home Screen** — it launches full screen with no
 browser chrome.
 
+## Offline and updates
+
+`sw.js` is a service worker that keeps a copy of every file, so after the first visit
+the app opens with no connection at all. It asks the network first and only falls
+back to that copy when the request fails or takes more than three seconds, so a push
+to `main` reaches phones on their next launch — there is no cache version to bump.
+Every good response also refreshes the stored copy, which keeps the offline version
+current. A new file the page loads must also be added to `FILES` in `sw.js`, or it
+won't be there offline until it has been fetched once.
+
 ## Files
 
 ```
 index.html      markup and the inline SVG ring
 styles.css      the whole theme; sizes come from CSS custom properties
 app.js          state, the swipe engine, rendering, persistence
+sw.js           service worker: offline copy, network-first updates
 tools/          node tools/make-icons.mjs   regenerates the PNG icons
                 node tools/check-sizes.mjs  prints the layout table per screen
 ```
