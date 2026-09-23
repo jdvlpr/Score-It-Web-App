@@ -115,6 +115,10 @@
         <span>Tick sound</span>
         <input type="checkbox" id="opt-sound" class="switch">
       </label>
+      <label class="row switch-row" id="row-awake">
+        <span>Keep screen on</span>
+        <input type="checkbox" id="opt-awake" class="switch">
+      </label>
       <label class="row range-row">
         <span>Sensitivity</span>
         <input type="range" id="opt-steps" min="6" max="24" step="2">
@@ -122,7 +126,7 @@
       </label>
     </div>
     <button class="rowbtn danger" id="reset-scores">Reset all scores</button>
-    <p class="hint">Press a dot and swipe around the ring to score. Tap a name to rotate it.</p>
+    <p class="hint">Press a dot and swipe around the ring to score. Tap a name to rotate it. Long-press a score to type one in.</p>
   </div>
 </section>
 
@@ -145,6 +149,28 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5.5 19.5 10 15 14.5"/><path d="M19.5 10h-9a6 6 0 0 0 0 12h2"/></svg>
       Redo
     </button>
+  </footer>
+</section>
+
+<section class="sheet" id="sheet-score" hidden aria-labelledby="score-title">
+  <div class="sheet-grab"></div>
+  <header class="sheet-head">
+    <h2 id="score-title"></h2>
+  </header>
+  <form class="sheet-body" id="score-form" autocomplete="off">
+    <div class="seg" id="score-mode" role="group" aria-label="Entry mode">
+      <button type="button" data-mode="add">Add points</button>
+      <button type="button" data-mode="set">Set total</button>
+    </div>
+    <div class="score-entry">
+      <button type="button" class="sign" id="score-sign" aria-label="Negative" aria-pressed="false">&minus;</button>
+      <input class="score-input" id="score-input" type="text" inputmode="numeric" enterkeyhint="done" aria-describedby="score-preview">
+    </div>
+    <p class="score-preview" id="score-preview"></p>
+  </form>
+  <footer class="sheet-foot">
+    <button class="bigbtn" type="button" data-close>Cancel</button>
+    <button class="bigbtn primary" type="submit" form="score-form">Save</button>
   </footer>
 </section>
 

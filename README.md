@@ -12,7 +12,8 @@ one static page you can host on GitHub Pages.
 | --- | --- |
 | **Press a dot and swipe around the ring** | Dials that player's score up (clockwise) or down (counter-clockwise). The dot follows your finger and trails the player's color behind it; the middle shows the pending change and the player's own label shows what their total will be. Lift your finger and the dot winds back to its seat. |
 | **Tap a name or score** | Rotates it 90° — so scores face whoever is sitting on that side of the table |
-| **⚙︎ (top right)** | Add or remove players, rename them, pick any color, set the score step and sensitivity, turn haptics and the tick sound on or off, reset scores |
+| **Long-press a score** (or right-click it) | Type a number instead: **Add points** for a round's tally, or **Set total** to copy a score over. The − button stands in for the minus key phone number pads don't have. It goes into the history as one move, so it undoes like a swipe. Each total in the ⚙︎ sheet opens the same thing. |
+| **⚙︎ (top right)** | Add or remove players, rename them, pick any color, set the score step and sensitivity, turn haptics, the tick sound and keep-screen-on on or off, reset scores |
 | **☰ (top left)** | Score history with undo and redo |
 
 **Score step** sets how much each stop on the ring is worth — 1, 5, 10, 25 or 50 — so a
@@ -28,6 +29,11 @@ centre.
 One swipe is one entry in the history, so undo takes back the whole move rather
 than unwinding it a point at a time. Everything is stored in `localStorage` on
 the device — the game is still there when you come back.
+
+**Keep screen on** (on by default) holds a screen wake lock while the app is in front, so
+the phone doesn't dim and lock between turns. The browser lets go of it whenever the app
+is hidden, so it is taken again on the way back. Browsers without the Wake Lock API
+(iOS before 16.4) don't show the switch.
 
 ## Any screen
 

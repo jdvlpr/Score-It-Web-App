@@ -30,7 +30,7 @@
     players: [newPlayer("Player 1", 0), newPlayer("Player 2", 1), newPlayer("Player 3", 2), newPlayer("Player 4", 3)],
     log: [],
     cursor: 0,
-    settings: { steps: 12, step: 1, haptics: true, sound: true },
+    settings: { steps: 12, step: 1, haptics: true, sound: true, awake: true },
   });
 
   let uid = Date.now();   // not modulo anything: a wrapping counter re-issues ids across sessions
@@ -51,12 +51,13 @@
       }));
       raw.log = Array.isArray(raw.log) ? raw.log.filter((e) => e && Number.isFinite(+e.delta)) : [];
       raw.cursor = Math.max(0, Math.min(raw.log.length, +raw.cursor || 0));
-      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false }, raw.settings || {});
+      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false, awake: true }, raw.settings || {});
       // Numbers, not strings: syncStep compares with === and steps is a divisor.
       st.step = STEPS.includes(+st.step) ? +st.step : 1;
       st.steps = +st.steps >= 6 && +st.steps <= 24 ? Math.round(+st.steps / 2) * 2 : 12;
       st.haptics = !!st.haptics;
       st.sound = !!st.sound;
+      st.awake = !!st.awake;
       raw.settings = st;
       return raw;
     } catch (_) {
@@ -84,7 +85,7 @@
   const byId = (id) => state.players.find((p) => p.id === id);
   const displayName = (p, i) => p.name.trim() || "Player " + (i + 1);
   const labelAria = (p, i, crowned) =>
-    `${displayName(p, i)}: ${p.score}.${crowned ? " Leading." : ""} Tap to rotate.`;
+    `${displayName(p, i)}: ${p.score}.${crowned ? " Leading." : ""} Tap to rotate, long-press to type a score.`;
 
   function commit(id, delta) {
     const p = byId(id);
@@ -637,6 +638,9 @@
   }
 
   /* tap a name to rotate it toward whoever is sitting there */
+  let press = null;         // a finger held on a label, on its way to becoming a long-press
+  let pressed = false;      // the held press has already opened the sheet
+
   const rotate = (e) => {
     const el = e.target.closest(".label");
     if (!el) return;
@@ -647,19 +651,79 @@
     buzz(7);
     save();
   };
-  topEl.addEventListener("click", rotate);
-  botEl.addEventListener("click", rotate);
+
+  function cancelPress() {
+    if (!press) return;
+    clearTimeout(press.timer);
+    press.el.classList.remove("is-pressing");
+    press = null;
+  }
+
+  const startPress = (e) => {
+    const el = e.target.closest(".label");
+    if (!el || drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+    cancelPress();
+    pressed = false;
+    el.classList.add("is-pressing");
+    press = { el, pid: e.pointerId, x: e.clientX, y: e.clientY };
+    press.timer = setTimeout(firePress, 480);
+  };
+  function firePress() {
+    if (!press || pressed) return;
+    clearTimeout(press.timer);
+    press.el.classList.remove("is-pressing");
+    pressed = true;
+    feedback(true);
+    openScore(press.el.dataset.id);
+  }
+  const movePress = (e) => {
+    if (press && e.pointerId === press.pid && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancelPress();
+  };
+  // A timer can't raise the phone's keyboard, but the release that ends the press can.
+  const endPress = (e) => {
+    if (!press || e.pointerId !== press.pid) return;
+    const fired = pressed;
+    cancelPress();
+    if (!fired) return;
+    if (sheetOpen === "score") scoreInput.focus();
+    // The release still sends a mousedown and a click, and they land on whatever is under
+    // the finger now — the scrim, which would blur the input and shut the sheet that just
+    // opened. Not every browser sends them, hence the timeout.
+    const swallow = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+    for (const t of ["mousedown", "click"]) document.addEventListener(t, swallow, { capture: true, once: true });
+    setTimeout(() => {
+      for (const t of ["mousedown", "click"]) document.removeEventListener(t, swallow, true);
+    }, 400);
+  };
+
+  for (const host of [topEl, botEl]) {
+    host.addEventListener("click", rotate);
+    host.addEventListener("pointerdown", startPress);
+    host.addEventListener("pointermove", movePress);
+    host.addEventListener("pointerup", endPress);
+    host.addEventListener("pointercancel", cancelPress);
+    // Right-click on a desktop; also what Android sends for a held finger.
+    host.addEventListener("contextmenu", (e) => {
+      const el = e.target.closest(".label");
+      if (!el) return;
+      e.preventDefault();
+      if (press) return firePress();   // a held finger: open now, and its release raises the keyboard
+      openScore(el.dataset.id);
+      scoreInput.focus();
+    });
+  }
 
   /* ---------------- sheets ---------------- */
 
   const scrim = $("#scrim");
-  const sheets = { players: $("#sheet-players"), history: $("#sheet-history") };
+  const sheets = { players: $("#sheet-players"), history: $("#sheet-history"), score: $("#sheet-score") };
   let sheetOpen = null;
 
   function openSheet(which) {
     if (sheetOpen) closeSheet();
     sheetOpen = which;
-    which === "players" ? renderPlayers() : renderHistory();
+    if (which === "players") renderPlayers();
+    if (which === "history") renderHistory();
     const s = sheets[which];
     scrim.hidden = false;
     s.hidden = false;
@@ -675,6 +739,7 @@
     sheetOpen = null;
     scrim.classList.remove("open");
     if (!s) return;
+    if (s.contains(document.activeElement)) document.activeElement.blur();   // drop the keyboard with the sheet
     s.classList.remove("open");
     setTimeout(() => {
       if (sheets[sheetOpen] === s) return;      // reopened while it was still sliding out
@@ -744,6 +809,17 @@
   }
   initSheetDrag(sheets.players);
   initSheetDrag(sheets.history);
+  initSheetDrag(sheets.score);
+
+  // Phones lay the keyboard over the page rather than shrinking it, which would bury a
+  // bottom sheet's input. --kb lifts the sheets by however much the keyboard covers.
+  const vv = window.visualViewport;
+  if (vv) {
+    const kb = () => document.documentElement.style.setProperty(
+      "--kb", Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) + "px");
+    vv.addEventListener("resize", kb);
+    vv.addEventListener("scroll", kb);
+  }
 
   /* players sheet */
   const rowsEl = $("#player-rows");
@@ -756,11 +832,12 @@
       row.innerHTML =
         `<button class="swatch" style="--c:${p.color}" aria-label="Color for ${escapeHtml(displayName(p, i))}"></button>` +
         `<input class="name-input" maxlength="14" style="--c:${p.color}" value="${escapeHtml(p.name)}" placeholder="Player ${i + 1}">` +
-        `<span class="tally">${p.score}</span>` +
+        `<button class="tally" type="button" aria-label="Type a score for ${escapeHtml(displayName(p, i))}">${p.score}</button>` +
         (state.players.length > 1
           ? `<button class="del" aria-label="Remove ${escapeHtml(displayName(p, i))}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`
           : "");
       row.querySelector(".swatch").onclick = (e) => openPicker(e.currentTarget, p);
+      row.querySelector(".tally").onclick = () => { openScore(p.id); scoreInput.focus(); };
       const input = row.querySelector(".name-input");
       input.oninput = () => { p.name = input.value; save(); render(); };
       const del = row.querySelector(".del");
@@ -859,6 +936,112 @@
 
   $("#undo").onclick = () => { if (undo()) { refreshScores(); renderHistory(); feedback(); } };
   $("#redo").onclick = () => { if (redo()) { refreshScores(); renderHistory(); feedback(); } };
+
+  /* score sheet: type a number instead of dialling it */
+  const scoreInput = $("#score-input"), scoreSign = $("#score-sign");
+  const scorePreview = $("#score-preview"), scoreMode = $("#score-mode");
+  let scoreFor = null;
+  let entryMode = "add";   // kept between openings: a game scored by rounds adds every time
+
+  function openScore(id) {
+    const p = byId(id);
+    if (!p) return;
+    scoreFor = id;
+    $("#score-title").textContent = displayName(p, state.players.indexOf(p));
+    sheets.score.style.setProperty("--c", p.color);
+    openSheet("score");
+    setEntryMode(entryMode);
+  }
+
+  function setEntryMode(mode) {
+    entryMode = mode;
+    scoreMode.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+    const p = byId(scoreFor);
+    scoreInput.value = mode === "set" && p ? String(p.score) : "";
+    if (document.activeElement === scoreInput) scoreInput.select();
+    syncEntry();
+  }
+
+  const entered = () => (/^-?\d+$/.test(scoreInput.value) ? +scoreInput.value : null);
+
+  // Every change goes into the log as a delta, so a typed total undoes like a swipe.
+  function entryDelta() {
+    const p = byId(scoreFor), n = entered();
+    if (!p || n === null) return 0;
+    return entryMode === "add" ? n : n - p.score;
+  }
+
+  function syncEntry() {
+    const p = byId(scoreFor);
+    if (!p) return;
+    scoreSign.setAttribute("aria-pressed", String(scoreInput.value.startsWith("-")));
+    const d = entryDelta();
+    scorePreview.textContent = d ? `${p.score} → ${p.score + d}  (${fmt(d)})` : `Currently ${p.score}`;
+  }
+
+  // Phone number pads have no minus key: the sign lives on its own button, and a pasted
+  // or hardware-typed minus is kept only in front.
+  scoreInput.addEventListener("input", () => {
+    const v = scoreInput.value.trim();
+    const neg = v.startsWith("-") || v.startsWith("−");
+    scoreInput.value = (neg ? "-" : "") + v.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 7);
+    syncEntry();
+  });
+  scoreInput.addEventListener("focus", () => scoreInput.select());
+
+  // These buttons must not take focus from the input, or the keyboard drops on every tap.
+  for (const b of [scoreSign, ...scoreMode.querySelectorAll("button")]) {
+    b.addEventListener("pointerdown", (e) => e.preventDefault());
+  }
+  scoreSign.onclick = () => {
+    const v = scoreInput.value;
+    scoreInput.value = v.startsWith("-") ? v.slice(1) : "-" + v;
+    syncEntry();
+  };
+  scoreMode.querySelectorAll("button").forEach((b) => (b.onclick = () => setEntryMode(b.dataset.mode)));
+
+  $("#score-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const id = scoreFor, delta = entryDelta();
+    closeSheet();
+    if (!delta) return;
+    commit(id, delta);
+    refreshScores();
+    feedback(true);
+    const l = labelEls.get(id);
+    if (!l) return;
+    l.score.classList.remove("pop");
+    void l.score.offsetWidth;
+    l.score.classList.add("pop");
+  });
+
+  /* keep the screen on while the app is in front */
+  let wake = null;   // the pending or held lock, or null
+  function keepAwake() {
+    if (wake || !state.settings.awake || !navigator.wakeLock || document.visibilityState !== "visible") return;
+    const p = wake = navigator.wakeLock.request("screen").then(
+      (lock) => { lock.addEventListener("release", () => { if (wake === p) wake = null; }); return lock; },
+      () => { if (wake === p) wake = null; return null; });
+  }
+  function letSleep() {
+    const p = wake;
+    wake = null;
+    p?.then((lock) => lock?.release()).catch(() => {});
+  }
+  // The browser drops the lock whenever the app is hidden, so take it again on the way back.
+  // Some browsers only grant it inside a gesture, so any touch retries too; it's a no-op once held.
+  document.addEventListener("visibilitychange", keepAwake);
+  document.addEventListener("pointerdown", keepAwake, true);
+
+  const optA = $("#opt-awake");
+  if (!navigator.wakeLock) $("#row-awake").hidden = true;
+  optA.checked = state.settings.awake;
+  optA.onchange = () => {
+    state.settings.awake = optA.checked;
+    optA.checked ? keepAwake() : letSleep();
+    save();
+  };
+  keepAwake();
 
   /* ---------------- color picker ---------------- */
 

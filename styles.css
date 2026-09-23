@@ -116,8 +116,12 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   overflow: visible;   /* the crown overhangs the top of the button box */
   padding: 0;
   touch-action: manipulation;
+  user-select: none;             /* a long-press types a score; it must not select text or pop a callout */
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   transition: opacity .26s var(--ease);
 }
+.label.is-pressing { opacity: .55; transition-duration: .45s; }
 
 /* Mid-swipe the board belongs to one player: everybody else steps back. */
 .app.is-dragging .label { opacity: 0; }
@@ -335,11 +339,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--kb, 0px);          /* rides above the on-screen keyboard, set from JS */
   width: min(100%, 640px, var(--app-w, 560px));
   margin-inline: auto;
   z-index: 21;
-  max-height: min(92dvh, 720px);   /* twelve players must not become a 1300px wall */
+  max-height: calc(min(92dvh, 720px) - var(--kb, 0px));   /* twelve players must not become a 1300px wall */
   display: flex;
   flex-direction: column;
   background: #0c0c0e;
@@ -424,7 +428,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .name-input::placeholder { color: #55555c; font-weight: 500; }
 
-.row .tally { font-size: 15px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.row .tally { font-size: 15px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; padding: 6px 10px; margin: -6px -4px; border-radius: 10px; background: var(--surface-2); }
+.row .tally:active { transform: scale(.94); }
 
 .del {
   flex: 0 0 auto;
@@ -507,6 +512,45 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .bigbtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .bigbtn:active { transform: scale(.97); }
 .bigbtn[disabled] { opacity: .34; pointer-events: none; }
+.bigbtn.primary { background: #0a84ff; color: #fff; }
+
+#sheet-score .sheet-head h2 { color: var(--c, var(--text)); }
+#score-mode { background: var(--surface); margin-bottom: 12px; }
+.score-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border-radius: 16px;
+}
+.sign {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 24px;
+  font-weight: 600;
+  transition: background .18s var(--ease), color .18s var(--ease);
+}
+.sign[aria-pressed="true"] { color: var(--c, var(--text)); box-shadow: inset 0 0 0 2px var(--c, var(--text)); }
+.score-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 54px 0 0;   /* the sign button's width again, so the number sits centred */
+  font-size: 44px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--c, var(--text));
+  background: none;
+  border: 0;
+  outline: none;
+}
+.score-input::placeholder { color: #3a3a40; }
+.score-preview { margin: 12px 4px 0; min-height: 1.5em; text-align: center; font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* history */
 .standings { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 0; padding: 4px 0 16px; }
@@ -590,7 +634,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
    and the grab handle keep meaning what they meant. */
 @media (min-width: 700px) and (min-height: 640px) {
   .sheet {
-    bottom: 20px;
+    bottom: calc(20px + var(--kb, 0px));
     border: 1px solid #232327;
     border-radius: var(--sheet-r);
     box-shadow: 0 24px 70px rgba(0, 0, 0, .62);
