@@ -911,7 +911,7 @@
 
   function renderHistory() {
     standEl.textContent = "";
-    const ranked = state.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score);
+    const ranked = state.players.map((p, i) => ({ p, i })).sort((a, b) => (state.settings.lowWins ? a.p.score - b.p.score : b.p.score - a.p.score));
     for (const { p, i } of ranked) {
       const s = document.createElement("div");
       s.className = "s";
