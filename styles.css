@@ -431,6 +431,31 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .row .tally { font-size: 15px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; padding: 6px 10px; margin: -6px -4px; border-radius: 10px; background: var(--surface-2); }
 .row .tally:active { transform: scale(.94); }
 
+.grip {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 36px;
+  margin: -4px -6px -4px -4px;
+  display: grid;
+  place-items: center;
+  touch-action: none;   /* the drag is ours, not a scroll */
+  cursor: grab;
+}
+.grip svg { width: 18px; height: 18px; stroke: #5c5c63; stroke-width: 2; stroke-linecap: round; fill: none; }
+.reordering .grip { cursor: grabbing; }
+
+/* While one row is dragged, the rest glide aside; the lifted row tracks the finger exactly. */
+.rows.reordering { overflow: visible; }
+.reordering .row { transition: transform .18s var(--ease); }
+.row.lifted {
+  position: relative;
+  z-index: 1;
+  transition: none;
+  background: var(--surface-2);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+}
+
 .del {
   flex: 0 0 auto;
   width: 30px;

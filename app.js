@@ -833,6 +833,9 @@
       const row = document.createElement("div");
       row.className = "row";
       row.innerHTML =
+        (state.players.length > 1
+          ? `<button class="grip" type="button" aria-label="Reorder ${escapeHtml(displayName(p, i))}. Drag, or use the arrow keys."><svg viewBox="0 0 24 24"><path d="M5 8h14M5 12h14M5 16h14"/></svg></button>`
+          : "") +
         `<button class="swatch" style="--c:${p.color}" aria-label="Color for ${escapeHtml(displayName(p, i))}"></button>` +
         `<input class="name-input" maxlength="14" style="--c:${p.color}" value="${escapeHtml(p.name)}" placeholder="Player ${i + 1}">` +
         `<button class="tally" type="button" aria-label="Type a score for ${escapeHtml(displayName(p, i))}">${p.score}</button>` +
@@ -852,9 +855,79 @@
         state.cursor = Math.max(0, state.cursor - before);
         save(); render(); renderPlayers();
       };
+      const grip = row.querySelector(".grip");
+      if (grip) initGrip(grip, row, p);
       rowsEl.appendChild(row);
     });
     $("#add-player").disabled = state.players.length >= MAX_PLAYERS;
+  }
+
+  // Seat order is board order, so moving a row moves that player around the dial.
+  function movePlayer(p, to) {
+    const from = state.players.indexOf(p);
+    to = Math.max(0, Math.min(state.players.length - 1, to));
+    if (from < 0 || from === to) return false;
+    state.players.splice(from, 1);
+    state.players.splice(to, 0, p);
+    save(); render(); renderPlayers();
+    return true;
+  }
+
+  // Drag a row by its grip. The other rows slide out of the way as it passes them; the
+  // list is only rebuilt on release. The grip swallows its pointer events so the sheet's
+  // swipe-to-dismiss never sees them.
+  function initGrip(grip, row, p) {
+    let pid = null, startY = 0, from = 0, to = 0, h = 0, rows = [];
+    grip.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      if (pid !== null) return;
+      pid = e.pointerId;
+      startY = e.clientY;
+      rows = [...rowsEl.children];
+      from = to = rows.indexOf(row);
+      h = row.offsetHeight;
+      try { grip.setPointerCapture(pid); } catch (_) {}
+      rowsEl.classList.add("reordering");
+      row.classList.add("lifted");
+      buzz(8);
+    });
+    grip.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== pid) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const lo = -from * h, hi = (rows.length - 1 - from) * h;
+      const dy = Math.max(lo, Math.min(hi, e.clientY - startY));
+      row.style.transform = `translateY(${dy}px)`;
+      const next = from + Math.round(dy / h);
+      if (next === to) return;
+      to = next;
+      rows.forEach((r, j) => {
+        if (r === row) return;
+        const shift = j > from && j <= to ? -h : j < from && j >= to ? h : 0;
+        r.style.transform = shift ? `translateY(${shift}px)` : "";
+      });
+      buzz(5);
+    }, { passive: false });
+    const end = (e) => {
+      if (e.pointerId !== pid) return;
+      e.stopPropagation();
+      pid = null;
+      rowsEl.classList.remove("reordering");
+      if (!movePlayer(p, to)) {
+        row.classList.remove("lifted");
+        rows.forEach((r) => (r.style.transform = ""));
+      }
+    };
+    grip.addEventListener("pointerup", end);
+    grip.addEventListener("pointercancel", end);
+    grip.addEventListener("keydown", (e) => {
+      const d = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      if (movePlayer(p, state.players.indexOf(p) + d)) {
+        rowsEl.children[state.players.indexOf(p)]?.querySelector(".grip")?.focus();
+      }
+    });
   }
 
   $("#add-player").onclick = () => {
