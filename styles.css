@@ -313,13 +313,56 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   height: calc(var(--dot-pct) * 1cqw);
   border-radius: 50%;
   background: var(--c);
-  transition: transform .3s var(--ease), box-shadow .3s var(--ease);
+  transition: transform .3s var(--ease), box-shadow .3s var(--ease), opacity .3s var(--ease);
 }
 
 .dot:active .dot-fill { transform: scale(.9); }
+/* Rounds: a ring marks who starts; whoever has already scored this round steps back. */
+.dot.is-starter .dot-fill { box-shadow: 0 0 0 max(2px, .5cqw) var(--track), 0 0 0 max(3.5px, .95cqw) var(--c); }
+.dot.is-done .dot-fill { opacity: .35; }
+.dial.is-dragging .dot.is-active .dot-fill { opacity: 1; }
 .dial.is-dragging .dot { opacity: 0; }   /* the ring belongs to one player mid-swipe */
 .dial.is-dragging .dot.is-active { opacity: 1; }
 .dial.is-dragging .dot.is-active .dot-fill { transform: scale(1.225); box-shadow: 0 0 5px color-mix(in srgb, var(--c) 75%, transparent); }
+
+/* ---------- round hub ---------- */
+
+.hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40cqw;
+  height: 40cqw;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.2cqw;
+  color: var(--text);
+  transition: opacity .22s var(--ease);
+}
+.hub-k {
+  font-size: max(10px, 2.8cqw);
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hub-n {
+  font-size: 15cqw;
+  font-weight: 800;
+  letter-spacing: -.035em;
+  line-height: .72;
+  font-variant-numeric: tabular-nums;
+  transition: transform .18s var(--ease);
+}
+.hub-n.pop { animation: pop .42s var(--ease); }
+.hub-next { transition: opacity .26s var(--ease); }
+.hub:disabled .hub-next { opacity: 0; }
+.hub:active:not(:disabled) .hub-n { transform: scale(.94); }
+.dial.is-dragging .hub { opacity: 0; }
 
 /* ---------- sheets ---------- */
 
@@ -602,6 +645,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .log .entry .who { flex: 1 1 auto; font-weight: 600; font-size: 15px; }
 .log .entry .delta { font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 .log .entry .bead { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: 0 0 auto; }
+.log .round {
+  padding: 16px 4px 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.log .round.undone { opacity: .28; }
 .log .empty { padding: 30px 0; text-align: center; color: #55555c; font-size: 14px; }
 
 /* ---------- color picker ---------- */

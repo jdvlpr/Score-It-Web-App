@@ -30,7 +30,7 @@
     players: [newPlayer("Player 1", 0), newPlayer("Player 2", 1), newPlayer("Player 3", 2), newPlayer("Player 4", 3)],
     log: [],
     cursor: 0,
-    settings: { steps: 12, step: 1, haptics: true, sound: true, awake: true, lowWins: false },
+    settings: { steps: 12, step: 1, haptics: true, sound: true, awake: true, lowWins: false, rounds: true },
   });
 
   let uid = Date.now();   // not modulo anything: a wrapping counter re-issues ids across sessions
@@ -51,7 +51,16 @@
       }));
       raw.log = Array.isArray(raw.log) ? raw.log.filter((e) => e && Number.isFinite(+e.delta)) : [];
       raw.cursor = Math.max(0, Math.min(raw.log.length, +raw.cursor || 0));
-      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false, awake: true, lowWins: false }, raw.settings || {});
+      // Saves from before rounds: replay the log to find where each round ended.
+      if (raw.log.some((e) => !Number.isFinite(e.r))) {
+        let r = 1, seen = new Set();
+        for (const e of raw.log) {
+          e.r = r;
+          seen.add(e.playerId);
+          if (raw.players.every((p) => seen.has(p.id))) { r++; seen = new Set(); }
+        }
+      }
+      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false, awake: true, lowWins: false, rounds: true }, raw.settings || {});
       // Numbers, not strings: syncStep compares with === and steps is a divisor.
       st.step = STEPS.includes(+st.step) ? +st.step : 1;
       st.steps = +st.steps >= 6 && +st.steps <= 24 ? Math.round(+st.steps / 2) * 2 : 12;
@@ -59,6 +68,7 @@
       st.sound = !!st.sound;
       st.awake = !!st.awake;
       st.lowWins = !!st.lowWins;
+      st.rounds = !!st.rounds;
       raw.settings = st;
       return raw;
     } catch (_) {
@@ -88,16 +98,39 @@
   const labelAria = (p, i, crowned) =>
     `${displayName(p, i)}: ${p.score}.${crowned ? " Leading." : ""} Tap to rotate, long-press to type a score.`;
 
+  // A delta of 0 is a real move when rounds are on: it's how a player scores nothing.
   function commit(id, delta) {
     const p = byId(id);
-    if (!p || !delta) return;
-    state.log.length = state.cursor;              // a new move drops the redo tail
-    state.log.push({ playerId: id, delta, at: Date.now() });
-    if (state.log.length > MAX_LOG) state.log.splice(0, state.log.length - MAX_LOG);
-    state.cursor = state.log.length;
+    if (!p) return;
+    record({ playerId: id, delta });
     p.score += delta;
     save();
   }
+
+  // Every entry carries the round it was made in, so undo and redo move the round too.
+  function record(e) {
+    const r = roundNow().round;
+    state.log.length = state.cursor;              // a new move drops the redo tail
+    state.log.push({ ...e, r, at: Date.now() });
+    if (state.log.length > MAX_LOG) state.log.splice(0, state.log.length - MAX_LOG);
+    state.cursor = state.log.length;
+  }
+
+  // A round ends once everybody has scored in it, or when someone calls the next one.
+  function roundNow() {
+    const log = state.log, last = log[state.cursor - 1];
+    if (!last) return { round: 1, scored: new Set() };
+    if (last.next) return { round: last.r + 1, scored: new Set() };
+    const scored = new Set();
+    for (let i = state.cursor - 1; i >= 0 && log[i].r === last.r && !log[i].next; i--) scored.add(log[i].playerId);
+    return state.players.every((p) => scored.has(p.id))
+      ? { round: last.r + 1, scored: new Set() }
+      : { round: last.r, scored };
+  }
+
+  const roundsOn = () => state.settings.rounds && state.players.length > 1;
+  // Zero only counts as a move for someone still to score this round; otherwise it's a cancel.
+  const zeroCounts = (id) => roundsOn() && !roundNow().scored.has(id);
 
   function undo() {
     if (!state.cursor) return false;
@@ -130,7 +163,8 @@
 
   const app = $(".app"), dial = $("#dial"), barEl = $(".topbar"),
         dotsEl = $("#dots"), trailEl = $("#trail"),
-        topEl = $("#labels-top"), botEl = $("#labels-bottom");
+        topEl = $("#labels-top"), botEl = $("#labels-bottom"),
+        hub = $("#hub"), hubN = $("#hub-n");
 
   const labelEls = new Map();
   const dotEls = new Map();
@@ -291,6 +325,7 @@
     fillLabels(topEl, top, m.cols[0]);
     fillLabels(botEl, bottom, m.cols[1]);
     updateCrowns();
+    updateRound();
     clearTrail();
   }
 
@@ -374,7 +409,39 @@
     fitType();
     state.players.forEach((p) => setScoreText(p.id, p.score));
     updateCrowns();
+    updateRound();
   }
+
+  // The round sits in the hub; the ring shows who starts it and who has already scored.
+  let shownRound = 0;
+  function updateRound() {
+    const on = roundsOn();
+    hub.hidden = !on;
+    const { round, scored } = on ? roundNow() : { round: 0, scored: new Set() };
+    const starter = on ? state.players[(round - 1) % state.players.length].id : null;
+    dotEls.forEach((el, id) => {
+      el.classList.toggle("is-starter", id === starter);
+      el.classList.toggle("is-done", scored.has(id));
+    });
+    hub.disabled = !scored.size;
+    hub.setAttribute("aria-label", `Round ${round}` + (scored.size ? ". Tap for the next round." : ""));
+    if (round === shownRound) return;
+    const up = shownRound && round > shownRound;
+    shownRound = round;
+    hubN.textContent = round;
+    if (!up) return;
+    hubN.classList.remove("pop");
+    void hubN.offsetWidth;
+    hubN.classList.add("pop");
+  }
+
+  hub.onclick = () => {
+    if (!roundNow().scored.size) return;
+    record({ next: true, delta: 0 });
+    save();
+    refreshScores();
+    feedback(true);
+  };
 
   function clearTrail() { trailEl.style.background = "none"; }
 
@@ -529,6 +596,7 @@
     const next = Math.round(drag.acc / (360 / state.settings.steps));
     if (next === drag.pending) return;
     drag.pending = next;
+    drag.reached = true;
     const p = byId(drag.id);
     setDeltaText(drag.id, fmt(next * state.settings.step));
     setScoreText(drag.id, p.score + next * state.settings.step);
@@ -540,7 +608,9 @@
     const d = drag;
     drag = null;
     const delta = (d.moved ? d.pending : 0) * state.settings.step;   // a tap with no swipe is no steps
-    if (delta) {
+    // Out to a stop and back home again scores a zero for the round.
+    const scored = delta || (d.reached && zeroCounts(d.id));
+    if (scored) {
       commit(d.id, delta);
       feedback(true);
     }
@@ -552,9 +622,10 @@
     l?.el.classList.remove("is-active");
     app.classList.remove("is-dragging");
     updateCrowns();   // batched with the line above, so the crown animates out of the drag state
+    updateRound();
     l?.score.classList.remove("pop");
     void l?.score.offsetWidth;
-    if (delta) l?.score.classList.add("pop");
+    if (scored) l?.score.classList.add("pop");
     // The score is already banked; the dot just winds itself home. Everyone else stays
     // faded until it lands, so it never flies through a dot that is fading back in.
     if (anim && !reduced.matches && Math.abs(anim.shown) > 0.5) {
@@ -979,6 +1050,10 @@
   optLow.checked = state.settings.lowWins;
   optLow.onchange = () => { state.settings.lowWins = optLow.checked; updateCrowns(); save(); };
 
+  const optRounds = $("#opt-rounds");
+  optRounds.checked = state.settings.rounds;
+  optRounds.onchange = () => { state.settings.rounds = optRounds.checked; updateRound(); save(); };
+
   /* history sheet */
   const logEl = $("#log"), standEl = $("#standings");
 
@@ -998,6 +1073,13 @@
     } else {
       for (let idx = state.log.length - 1; idx >= 0; idx--) {   // newest first
         const e = state.log[idx];
+        if (roundsOn() && state.log[idx + 1]?.r !== e.r) {
+          const h = document.createElement("div");
+          h.className = "round" + (idx >= state.cursor ? " undone" : "");
+          h.textContent = "Round " + e.r;
+          logEl.append(h);
+        }
+        if (e.next) continue;   // a called round shows only as its divider
         const p = byId(e.playerId);
         const i = state.players.indexOf(p);
         const row = document.createElement("div");
@@ -1083,8 +1165,9 @@
   $("#score-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const id = scoreFor, delta = entryDelta();
+    const zero = entryMode === "add" && entered() === 0 && zeroCounts(id);
     closeSheet();
-    if (!delta) return;
+    if (!delta && !zero) return;
     commit(id, delta);
     refreshScores();
     feedback(true);
