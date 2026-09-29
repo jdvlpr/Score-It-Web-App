@@ -897,14 +897,14 @@
   stepSeg.querySelectorAll("button").forEach((b) => (b.onclick = () => {
     state.settings.step = +b.dataset.v;
     syncStep();
-
-  const optLow = $("#opt-lowwins");
-  optLow.checked = state.settings.lowWins;
-  optLow.onchange = () => { state.settings.lowWins = optLow.checked; updateCrowns(); save(); };
     feedback();
     save();
   }));
   syncStep();
+
+  const optLow = $("#opt-lowwins");
+  optLow.checked = state.settings.lowWins;
+  optLow.onchange = () => { state.settings.lowWins = optLow.checked; updateCrowns(); save(); };
 
   /* history sheet */
   const logEl = $("#log"), standEl = $("#standings");
