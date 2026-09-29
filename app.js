@@ -30,7 +30,7 @@
     players: [newPlayer("Player 1", 0), newPlayer("Player 2", 1), newPlayer("Player 3", 2), newPlayer("Player 4", 3)],
     log: [],
     cursor: 0,
-    settings: { steps: 12, step: 1, haptics: true, sound: true, awake: true },
+    settings: { steps: 12, step: 1, haptics: true, sound: true, awake: true, lowWins: false },
   });
 
   let uid = Date.now();   // not modulo anything: a wrapping counter re-issues ids across sessions
@@ -51,13 +51,14 @@
       }));
       raw.log = Array.isArray(raw.log) ? raw.log.filter((e) => e && Number.isFinite(+e.delta)) : [];
       raw.cursor = Math.max(0, Math.min(raw.log.length, +raw.cursor || 0));
-      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false, awake: true }, raw.settings || {});
+      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false, awake: true, lowWins: false }, raw.settings || {});
       // Numbers, not strings: syncStep compares with === and steps is a divisor.
       st.step = STEPS.includes(+st.step) ? +st.step : 1;
       st.steps = +st.steps >= 6 && +st.steps <= 24 ? Math.round(+st.steps / 2) * 2 : 12;
       st.haptics = !!st.haptics;
       st.sound = !!st.sound;
       st.awake = !!st.awake;
+      st.lowWins = !!st.lowWins;
       raw.settings = st;
       return raw;
     } catch (_) {
@@ -340,7 +341,8 @@
 
   // Nobody is "in first" until somebody is actually ahead: a board where every score is
   // still level — two fresh players on 0, say — wears no crowns at all. A tie for the
-  // lead over anyone else crowns all of the tied players.
+  // lead over anyone else crowns all of the tied players. With "low score wins" on, the
+  // lead is the lowest score instead (golf, Hearts).
   function leaders() {
     const out = new Set();
     if (state.players.length < 2) return out;
@@ -350,7 +352,8 @@
       if (p.score < lo) lo = p.score;
     }
     if (hi === lo) return out;
-    for (const p of state.players) if (p.score === hi) out.add(p.id);
+    const best = state.settings.lowWins ? lo : hi;
+    for (const p of state.players) if (p.score === best) out.add(p.id);
     return out;
   }
 
@@ -894,6 +897,10 @@
   stepSeg.querySelectorAll("button").forEach((b) => (b.onclick = () => {
     state.settings.step = +b.dataset.v;
     syncStep();
+
+  const optLow = $("#opt-lowwins");
+  optLow.checked = state.settings.lowWins;
+  optLow.onchange = () => { state.settings.lowWins = optLow.checked; updateCrowns(); save(); };
     feedback();
     save();
   }));
