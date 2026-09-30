@@ -656,13 +656,26 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .score-preview { margin: 12px 4px 0; min-height: 1.5em; text-align: center; font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* history */
-.standings { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 0; padding: 4px 0 16px; }
+.standings { display: flex; flex-wrap: wrap; justify-content: center; gap: 22px 0; padding: 16px 0 16px; }
 .standings .s {
   flex: 0 0 calc(33.333% - 1px);
   min-width: 0;
   text-align: center;
 }
-.standings .s b { display: block; font-size: 13px; font-weight: 600; }
+.standings .s b { position: relative; display: block; font-size: 13px; font-weight: 600; }
+/* The board's crown, small, hung above the leader's name so it never moves the row. */
+.standings .lead {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 15px;
+  margin-bottom: 3px;
+  transform: translateX(-50%);
+  color: var(--gold);
+  filter: drop-shadow(0 1px 5px rgba(255, 221, 157, .5));
+}
+.standings .lead svg { display: block; width: 100%; height: auto; fill: currentColor; transform: scaleX(1.8); }
+.standings .lead path { stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; }
 .standings .s i { display: block; font-style: normal; font-size: 27px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 
 .log { border-top: 1px solid var(--line); }

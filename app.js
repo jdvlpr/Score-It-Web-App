@@ -1089,14 +1089,16 @@
 
   function renderHistory() {
     standEl.textContent = "";
-    const ranked = state.players.map((p, i) => ({ p, i })).sort((a, b) => (state.settings.lowWins ? a.p.score - b.p.score : b.p.score - a.p.score));
-    for (const { p, i } of ranked) {
+    // Seat order, like the board, so an undo never shuffles the row; the crown shows the lead.
+    const lead = leaders();
+    state.players.forEach((p, i) => {
       const s = document.createElement("div");
       s.className = "s";
       s.style.color = p.color;
-      s.innerHTML = `<b>${escapeHtml(displayName(p, i))}</b><i>${p.score}</i>`;
+      s.innerHTML = `<b>${lead.has(p.id) ? `<span class="lead" aria-label="Leading">${CROWN}</span>` : ""}` +
+        `${escapeHtml(displayName(p, i))}</b><i>${p.score}</i>`;
       standEl.appendChild(s);
-    }
+    });
     logEl.textContent = "";
     if (!state.log.length) {
       logEl.innerHTML = '<div class="empty">No moves yet.</div>';
