@@ -576,7 +576,6 @@
     if (!dot || drag) return;
     const p = byId(dot.dataset.id);
     if (!p) return;
-    unlockAudio();
     e.preventDefault();
     settle();                                  // a rewind still in flight lands now
     try { dial.setPointerCapture(e.pointerId); } catch (_) {}
@@ -681,29 +680,50 @@
   });
 
   /* haptics + tick */
+  // iOS only lets audio start from the end of a touch (touchend, pointerup, click), not
+  // its start, and a context left over from before the app was backgrounded can report
+  // "running" yet stay silent. So: retry on every kind of gesture, drop the context when
+  // the app hides, and prime each new one with a silent sample inside the gesture.
   let actx = null;
   let audioReady = null;
+  let primed = false;
 
   function unlockAudio() {
     if (!state.settings.sound) return;
 
     try {
-      if (!actx) {
+      if (!actx || actx.state === "closed") {
         actx = new (window.AudioContext || window.webkitAudioContext)();
+        primed = false;
       }
 
-      if (actx.state === "running") {
-        audioReady = Promise.resolve();
-      } else {
-        audioReady = actx.resume();
+      audioReady = actx.state === "running" ? Promise.resolve() : actx.resume();
+
+      if (!primed) {
+        const src = actx.createBufferSource();
+        src.buffer = actx.createBuffer(1, 1, 22050);
+        src.connect(actx.destination);
+        src.start(0);
+        audioReady.then(() => { primed = actx?.state === "running"; }).catch(() => {});
       }
     } catch (_) {
       audioReady = null;
     }
   }
 
+  for (const type of ["pointerdown", "pointerup", "touchend", "click"]) {
+    addEventListener(type, unlockAudio, { capture: true, passive: true });
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "hidden" || !actx) return;
+    actx.close().catch(() => {});
+    actx = null;
+    audioReady = null;
+  });
+
   const buzz = (ms) => { if (state.settings.haptics && navigator.vibrate) navigator.vibrate(ms); };
 
+  let queued = false;
   function feedback(strong) {
     buzz(strong ? 16 : 7);
     if (!state.settings.sound || !actx) return;
@@ -732,10 +752,13 @@
       } catch (_) {}
     };
 
+    // Not running yet: play once it wakes (the switch's own test tick), but never let a
+    // backlog of ticks from a swipe made before then all fire at once.
     if (actx.state === "running") {
       play();
-    } else if (audioReady) {
-      audioReady.then(play).catch(() => {});
+    } else if (audioReady && !queued) {
+      queued = true;
+      audioReady.then(play, () => {}).finally(() => { queued = false; });
     }
   }
 
