@@ -112,6 +112,10 @@
         <span>Low score wins</span>
         <input type="checkbox" id="opt-lowwins" class="switch">
       </label>
+      <label class="row input-row">
+        <span>Target score</span>
+        <input type="text" id="opt-target" inputmode="numeric" pattern="[0-9]*" placeholder="Off" autocomplete="off" aria-label="Target score">
+      </label>
       <label class="row switch-row">
         <span>Round counter</span>
         <input type="checkbox" id="opt-counter" class="switch">
@@ -175,8 +179,13 @@
     <button class="textbtn" data-close>Done</button>
   </header>
   <div class="sheet-body">
+    <div class="seg hist-view" id="hist-view" role="group" aria-label="History view" hidden>
+      <button type="button" data-v="moves">Moves</button>
+      <button type="button" data-v="rounds">Rounds</button>
+    </div>
     <div class="standings" id="standings"></div>
     <div class="log" id="log"></div>
+    <div class="rt-wrap" id="rounds-table" hidden></div>
   </div>
   <footer class="sheet-foot">
     <button class="bigbtn" id="undo">

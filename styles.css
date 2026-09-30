@@ -204,6 +204,35 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   100% { transform: scale(1); }
 }
 
+/* ---------- target progress ---------- */
+
+/* Out of flow, like the crown, so it never moves the tuned name/score metrics; it hangs
+   just under the total and turns with the label. */
+.label .bar {
+  position: absolute;
+  top: calc(100% + var(--score-fs) * .1);
+  left: 50%;
+  width: min(72%, calc(var(--score-fs) * 1.7));
+  height: max(3px, calc(var(--score-fs) * .075));
+  border-radius: 99px;
+  overflow: hidden;
+  transform: translateX(-50%);
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  display: none;
+  transition: opacity .2s linear;
+}
+.has-target .label .bar { display: block; }
+.label .bar span {
+  display: block;
+  height: 100%;
+  background: currentColor;
+  border-radius: inherit;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform .5s var(--ease);
+}
+.app.is-dragging .label .bar { opacity: 0; }
+
 /* ---------- crown ---------- */
 
 /* Out of flow on purpose: the leader changing must never nudge the name/score metrics
@@ -604,7 +633,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .plus { width: 19px; height: 19px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; fill: none; }
 
-.switch-row span, .range-row span, .seg-row > span, .stepper-row > span { flex: 1 1 auto; font-size: 16px; font-weight: 500; }
+.switch-row span, .range-row span, .seg-row > span, .stepper-row > span, .input-row > span { flex: 1 1 auto; font-size: 16px; font-weight: 500; }
 
 .seg-row { flex-direction: column; align-items: stretch; gap: 11px; padding-top: 13px; padding-bottom: 13px; }
 
@@ -626,6 +655,22 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: background .2s var(--ease), color .2s var(--ease), transform .16s var(--ease);
 }
 .seg button:active { transform: scale(.93); }
+
+.input-row input {
+  width: 92px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;   /* 16px or iOS zooms the page on focus */
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  outline: none;
+}
+.input-row input::placeholder { color: var(--muted); font-weight: 500; }
 
 .stepper { display: flex; align-items: center; gap: 3px; padding: 3px; border-radius: 12px; background: #0c0c0e; }
 .stepper button {
@@ -729,6 +774,56 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .standings .lead svg { display: block; width: 100%; height: auto; fill: currentColor; transform: scaleX(1.8); }
 .standings .lead path { stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; }
 .standings .s i { display: block; font-style: normal; font-size: 27px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+
+.hist-view { margin: 4px 0 6px; }
+
+.rt-wrap { overflow-x: auto; margin: 10px -16px 0; padding: 0 16px; -webkit-overflow-scrolling: touch; }
+.rt { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.rt th, .rt td { padding: 11px 6px; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
+.rt td { min-width: 52px; font-size: 16px; font-weight: 700; }
+.rt thead th { max-width: 80px; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 600; }
+/* The round column stays put while a wide table scrolls under it. */
+.rt th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 1%;
+  padding-left: 2px;
+  text-align: left;
+  background: #0c0c0e;   /* the sheet's own, so scrolled cells pass under it */
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rt td.none { opacity: .35; font-weight: 600; }
+.rt tr.live th:first-child { color: var(--text); }
+.rt tfoot td { font-size: 20px; font-weight: 800; letter-spacing: -.02em; border-bottom: 0; padding-top: 22px; }
+.rt tfoot td, .rt tfoot th { position: relative; }
+.rt tfoot th { padding-top: 22px; border-bottom: 0; }
+.rt .lead {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  width: 14px;
+  transform: translateX(-50%);
+  color: var(--gold);
+  filter: drop-shadow(0 1px 5px rgba(255, 221, 157, .5));
+}
+.rt .lead svg { display: block; width: 100%; height: auto; fill: currentColor; transform: scaleX(1.8); }
+.rt .lead path { stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; }
+.rt .disc {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 6px rgba(255, 255, 255, .35);
+}
+.rt-note { margin: 12px 0 0; font-size: 12px; color: #55555c; text-align: center; }
 
 .log { border-top: 1px solid var(--line); }
 .log .entry {

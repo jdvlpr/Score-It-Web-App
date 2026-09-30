@@ -9,6 +9,7 @@
   const MAX_PLAYERS = 12;
   const MAX_LOG = 250;
   const MAX_ROUNDS = 99;
+  const MAX_TARGET = 999999;
   const STEPS = [1, 5, 10, 25, 50];   // points added per stop on the ring
 
   const PALETTE = [
@@ -31,7 +32,7 @@
     players: [newPlayer("Player 1", 0), newPlayer("Player 2", 1), newPlayer("Player 3", 2), newPlayer("Player 4", 3)],
     log: [],
     cursor: 0,
-    settings: { steps: 12, step: 1, haptics: true, sound: true, awake: true, lowWins: false, counter: false, starter: false, roundRot: 0, total: 0 },
+    settings: { steps: 12, step: 1, haptics: true, sound: true, awake: true, lowWins: false, counter: false, starter: false, roundRot: 0, total: 0, target: 0 },
   });
 
   let uid = Date.now();   // not modulo anything: a wrapping counter re-issues ids across sessions
@@ -61,7 +62,7 @@
           if (raw.players.every((p) => seen.has(p.id))) { r++; seen = new Set(); }
         }
       }
-      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false, awake: true, lowWins: false, counter: false, starter: false, roundRot: 0, total: 0 }, raw.settings || {});
+      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false, awake: true, lowWins: false, counter: false, starter: false, roundRot: 0, total: 0, target: 0 }, raw.settings || {});
       // Numbers, not strings: syncStep compares with === and steps is a divisor.
       st.step = STEPS.includes(+st.step) ? +st.step : 1;
       st.steps = +st.steps >= 6 && +st.steps <= 24 ? Math.round(+st.steps / 2) * 2 : 12;
@@ -73,6 +74,7 @@
       st.starter = !!st.starter;
       st.roundRot = [0, 90, 180, 270].includes(+st.roundRot) ? +st.roundRot : 0;
       st.total = Math.max(0, Math.min(MAX_ROUNDS, Math.round(+st.total) || 0));   // 0 = no limit
+      st.target = Math.max(0, Math.min(MAX_TARGET, Math.round(+st.target) || 0));  // 0 = no target
       delete st.rounds;   // the old single switch, which defaulted on
       raw.settings = st;
       return raw;
@@ -130,6 +132,9 @@
   // A round ends once everybody has scored in it, or when someone calls the next one.
   // With a set number of rounds the game is over after the last: the round stops there,
   // and anything scored after it goes down as a correction to the final round.
+  //
+  // The game is over after the last round, or once somebody reaches the target score —
+  // at the end of that round when rounds are in play, so everyone gets the same turns.
   function roundNow() {
     const log = state.log, last = log[state.cursor - 1];
     let now;
@@ -142,9 +147,14 @@
         ? { round: last.r + 1, scored: new Set() }
         : { round: last.r, scored };
     }
-    const total = totalRounds();
-    now.over = !!total && now.round > total;
-    if (now.over) now.round = total;
+    const total = totalRounds(), target = state.settings.target;
+    const reached = !!target && state.players.some((p) => p.score >= target);
+    now.over = !!last && (!!last.post || (!!total && now.round > total) ||
+      (reached && (!roundsOn() || !now.scored.size)));
+    if (now.over) {
+      now.round = total ? Math.min(total, last.r) : last.r;
+      now.scored = new Set();
+    }
     return now;
   }
 
@@ -386,10 +396,15 @@
       const stack = document.createElement("span");
       stack.className = "score-stack";
       stack.append(sc, dl);
-      inner.append(crown, nm, stack);
+      const bar = document.createElement("span");
+      bar.className = "bar";
+      bar.setAttribute("aria-hidden", "true");
+      const fill = document.createElement("span");
+      bar.appendChild(fill);
+      inner.append(crown, nm, stack, bar);
       el.appendChild(inner);
       host.appendChild(el);
-      labelEls.set(s.p.id, { el, score: sc, delta: dl, inner });
+      labelEls.set(s.p.id, { el, score: sc, delta: dl, inner, bar: fill });
     }
   }
 
@@ -449,7 +464,8 @@
     const counter = state.settings.counter && n > 1, marker = state.settings.starter && n > 1;
     const { round, scored, over } = roundNow();
     const total = totalRounds(), final = !!total && round === total;
-    hub.hidden = !counter;
+    updateBars();
+    hub.hidden = !(counter || (over && n > 1));   // the winner shows even without the counter
     nextBtn.hidden = !(counter || marker);
     nextBtn.disabled = over || !scored.size;
     nextBtn.textContent = final ? "Finish game" : "Next round";
@@ -484,7 +500,7 @@
       said = "Game over. " + (p ? `${name.textContent} wins.` : "It's a tie.");
     }
     hub.setAttribute("aria-label", said + " Tap to rotate.");
-    const shown = over ? total + 1 : round;
+    const shown = over ? Infinity : round;
     if (shown === shownRound) return;
     const up = shownRound && shown > shownRound;
     shownRound = shown;
@@ -494,6 +510,18 @@
     el.classList.remove("pop");
     void el.offsetWidth;
     el.classList.add("pop");
+  }
+
+  // With a target score, a bar under each total shows how close it is. It fills to the
+  // target and no further; below zero it's simply empty.
+  function updateBars() {
+    const target = state.settings.target;
+    app.classList.toggle("has-target", !!target);
+    if (!target) return;
+    state.players.forEach((p) => {
+      const l = labelEls.get(p.id);
+      if (l) l.bar.style.transform = `scaleX(${Math.max(0, Math.min(1, p.score / target))})`;
+    });
   }
 
   // The progress ring: one segment per round, drawn round the hub. Rounds played are
@@ -523,7 +551,7 @@
     // Round caps overhang each end by half the stroke, so the gap has to allow for them.
     const gap = segs > 1 ? RING_W + 3 : 0;
     const len = RING_C / segs - gap;
-    const done = over ? total : round - 1 + frac;
+    const done = over ? round : round - 1 + frac;
     const circles = hubRing.querySelectorAll("circle");
     for (let k = 0; k < segs; k++) {
       const f = segs === 1 ? done / total : Math.max(0, Math.min(1, done - k));
@@ -1164,6 +1192,16 @@
   optLow.checked = state.settings.lowWins;
   optLow.onchange = () => { state.settings.lowWins = optLow.checked; updateCrowns(); save(); };
 
+  // Digits only; empty is Off.
+  const optTarget = $("#opt-target");
+  optTarget.value = state.settings.target || "";
+  optTarget.oninput = () => {
+    optTarget.value = optTarget.value.replace(/\D/g, "").replace(/^0+/, "").slice(0, 6);
+    state.settings.target = +optTarget.value || 0;
+    updateRound();
+    save();
+  };
+
   const rowTotal = $("#row-total"), totalVal = $("#total-val");
   const syncTotal = () => {
     rowTotal.hidden = !state.settings.counter;
@@ -1191,7 +1229,56 @@
   /* history sheet */
   const logEl = $("#log"), standEl = $("#standings");
 
+  // History has two views once rounds are in play: the move list, and a scoresheet with
+  // a row per round.
+  const histSeg = $("#hist-view"), tableEl = $("#rounds-table");
+  let histView = "moves";
+  histSeg.querySelectorAll("button").forEach((b) => (b.onclick = () => {
+    histView = b.dataset.v;
+    feedback();
+    renderHistory();
+  }));
+
+  function renderTable() {
+    const n = state.players.length, now = roundNow();
+    const rows = new Map();   // round -> { pts: Map(player -> points), s: starter id }
+    for (const e of state.log.slice(0, state.cursor)) {
+      if (!rows.has(e.r)) rows.set(e.r, { pts: new Map(), s: e.s });
+      if (e.next) continue;
+      const pts = rows.get(e.r).pts;
+      pts.set(e.playerId, (pts.get(e.playerId) || 0) + e.delta);
+    }
+    if (!now.over && !rows.has(now.round)) rows.set(now.round, { pts: new Map() });
+    const lead = leaders();
+    const cell = (p, v, cls = "") => `<td class="${cls}" style="color:${p.color}">${v}</td>`;
+    let html = '<table class="rt"><thead><tr><th></th>' +
+      state.players.map((p, i) => `<th style="color:${p.color}">${escapeHtml(displayName(p, i))}</th>`).join("") +
+      "</tr></thead><tbody>";
+    for (const r of [...rows.keys()].sort((a, b) => a - b)) {
+      const row = rows.get(r), live = !now.over && r === now.round;
+      const starter = state.settings.starter && (row.s === undefined ? state.players[(r - 1) % n]?.id : row.s);
+      html += `<tr${live ? ' class="live"' : ""}><th>R${r}</th>` + state.players.map((p) => {
+        const v = row.pts.get(p.id);
+        const disc = p.id === starter ? '<i class="disc" aria-label="Started"></i>' : "";
+        // Still to play this round is a dash; a finished round they didn't score in was a 0.
+        return cell(p, disc + (v === undefined ? (live ? "–" : "0") : v), v === undefined ? "none" : "");
+      }).join("") + "</tr>";
+    }
+    html += '</tbody><tfoot><tr><th>Total</th>' + state.players.map((p) =>
+      cell(p, (lead.has(p.id) ? `<span class="lead" aria-label="Leading">${CROWN}</span>` : "") + p.score)).join("") +
+      "</tr></tfoot></table>";
+    // The log only keeps its last MAX_LOG moves, so a long game loses its first rounds.
+    if (state.log.length >= MAX_LOG && state.log[0].r > 1) html += '<p class="rt-note">Earlier rounds not kept.</p>';
+    tableEl.innerHTML = html;
+  }
+
   function renderHistory() {
+    const table = roundsOn() && histView === "rounds";
+    histSeg.hidden = !roundsOn();
+    histSeg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === (table ? "rounds" : "moves")));
+    standEl.hidden = logEl.hidden = table;
+    tableEl.hidden = !table;
+    if (table) renderTable();
     standEl.textContent = "";
     // Seat order, like the board, so an undo never shuffles the row; the crown shows the lead.
     const lead = leaders();
