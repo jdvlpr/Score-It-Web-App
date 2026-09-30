@@ -317,8 +317,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 
 .dot:active .dot-fill { transform: scale(.9); }
-/* Rounds: a ring marks who starts; whoever has already scored this round steps back. */
-.dot.is-starter .dot-fill { box-shadow: 0 0 0 max(2px, .5cqw) var(--track), 0 0 0 max(3.5px, .95cqw) var(--c); }
+/* With the round counter on, whoever has already scored this round steps back. */
 .dot.is-done .dot-fill { opacity: .35; }
 .dial.is-dragging .dot.is-active .dot-fill { opacity: 1; }
 .dial.is-dragging .dot { opacity: 0; }   /* the ring belongs to one player mid-swipe */
@@ -339,9 +338,15 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2.2cqw;
   color: var(--text);
   transition: opacity .22s var(--ease);
+}
+.hub-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.2cqw;
+  transition: transform .42s var(--ease);
 }
 .hub-k {
   font-size: max(10px, 2.8cqw);
@@ -359,10 +364,31 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: transform .18s var(--ease);
 }
 .hub-n.pop { animation: pop .42s var(--ease); }
-.hub-next { transition: opacity .26s var(--ease); }
-.hub:disabled .hub-next { opacity: 0; }
-.hub:active:not(:disabled) .hub-n { transform: scale(.94); }
+.hub:active .hub-n { transform: scale(.94); }
 .dial.is-dragging .hub { opacity: 0; }
+
+/* The starting player's marker: a small white disc just inside the ring, by their dot,
+   like a dealer button. It hangs off an arm the size of the dial, so turning the arm
+   carries it round the ring from one seat to the next. */
+.starter {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: transform .7s var(--ease), opacity .22s var(--ease);
+}
+.starter::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: calc(12% + var(--dot-pct) * .5% + max(8px, 3.4cqw));
+  width: max(12px, 3.6cqw);
+  height: max(12px, 3.6cqw);
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 max(8px, 2.4cqw) rgba(255, 255, 255, .35);
+  transform: translate(-50%, -50%);
+}
+.dial.is-dragging .starter { opacity: 0; }
 
 /* ---------- sheets ---------- */
 
@@ -529,7 +555,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .rowbtn:active { transform: scale(.985); background: var(--surface-2); }
 .rowbtn[disabled] { color: #4a4a50; pointer-events: none; }
-.rowbtn.danger { color: var(--danger); }
+.rowbtn.danger { color: var(--danger); margin-top: 24px; }
+
+.group {
+  margin: 22px 16px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 .plus { width: 19px; height: 19px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; fill: none; }
 
 .switch-row span, .range-row span, .seg-row > span { flex: 1 1 auto; font-size: 16px; font-weight: 500; }

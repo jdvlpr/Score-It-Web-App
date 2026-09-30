@@ -76,10 +76,12 @@
 
       <div class="trail" id="trail"></div>
       <div class="dots" id="dots"></div>
+      <div class="starter" id="starter" role="img" hidden></div>
       <button class="hub" id="hub" type="button" hidden>
-        <span class="hub-k">Round</span>
-        <span class="hub-n" id="hub-n">1</span>
-        <span class="hub-k hub-next">Next ›</span>
+        <span class="hub-inner" id="hub-inner">
+          <span class="hub-k">Round</span>
+          <span class="hub-n" id="hub-n">1</span>
+        </span>
       </button>
     </div>
   </div>
@@ -101,7 +103,24 @@
       <svg viewBox="0 0 24 24" class="plus" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg>
       Add Player
     </button>
-    <div class="rows setting-rows">
+    <h3 class="group">Game</h3>
+    <div class="rows">
+      <label class="row switch-row">
+        <span>Low score wins</span>
+        <input type="checkbox" id="opt-lowwins" class="switch">
+      </label>
+      <label class="row switch-row">
+        <span>Round counter</span>
+        <input type="checkbox" id="opt-counter" class="switch">
+      </label>
+      <label class="row switch-row">
+        <span>Starting player</span>
+        <input type="checkbox" id="opt-starter" class="switch">
+      </label>
+    </div>
+    <button class="rowbtn" id="next-round" hidden>Next round</button>
+    <h3 class="group">Scoring</h3>
+    <div class="rows">
       <div class="row seg-row">
         <span>Score step</span>
         <div class="seg" id="opt-step" role="group" aria-label="Score step">
@@ -112,6 +131,14 @@
           <button type="button" data-v="50">50</button>
         </div>
       </div>
+      <label class="row range-row">
+        <span>Sensitivity</span>
+        <input type="range" id="opt-steps" min="6" max="24" step="2">
+        <em id="opt-steps-val"></em>
+      </label>
+    </div>
+    <h3 class="group">Device</h3>
+    <div class="rows">
       <label class="row switch-row">
         <span>Haptics</span>
         <input type="checkbox" id="opt-haptics" class="switch">
@@ -124,22 +151,9 @@
         <span>Keep screen on</span>
         <input type="checkbox" id="opt-awake" class="switch">
       </label>
-      <label class="row switch-row">
-        <span>Low score wins</span>
-        <input type="checkbox" id="opt-lowwins" class="switch">
-      </label>
-      <label class="row switch-row">
-        <span>Track rounds</span>
-        <input type="checkbox" id="opt-rounds" class="switch">
-      </label>
-      <label class="row range-row">
-        <span>Sensitivity</span>
-        <input type="range" id="opt-steps" min="6" max="24" step="2">
-        <em id="opt-steps-val"></em>
-      </label>
     </div>
     <button class="rowbtn danger" id="reset-scores">Reset all scores</button>
-    <p class="hint">Press a dot and swipe around the ring to score. Tap a name to rotate it. Long-press a score to type one in.</p>
+    <p class="hint">Press a dot and swipe around the ring to score. Tap a name or the round to rotate it. Long-press a score to type one in.</p>
   </div>
 </section>
 

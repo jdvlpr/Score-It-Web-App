@@ -30,7 +30,7 @@
     players: [newPlayer("Player 1", 0), newPlayer("Player 2", 1), newPlayer("Player 3", 2), newPlayer("Player 4", 3)],
     log: [],
     cursor: 0,
-    settings: { steps: 12, step: 1, haptics: true, sound: true, awake: true, lowWins: false, rounds: true },
+    settings: { steps: 12, step: 1, haptics: true, sound: true, awake: true, lowWins: false, counter: false, starter: false, roundRot: 0 },
   });
 
   let uid = Date.now();   // not modulo anything: a wrapping counter re-issues ids across sessions
@@ -60,7 +60,7 @@
           if (raw.players.every((p) => seen.has(p.id))) { r++; seen = new Set(); }
         }
       }
-      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false, awake: true, lowWins: false, rounds: true }, raw.settings || {});
+      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false, awake: true, lowWins: false, counter: false, starter: false, roundRot: 0 }, raw.settings || {});
       // Numbers, not strings: syncStep compares with === and steps is a divisor.
       st.step = STEPS.includes(+st.step) ? +st.step : 1;
       st.steps = +st.steps >= 6 && +st.steps <= 24 ? Math.round(+st.steps / 2) * 2 : 12;
@@ -68,7 +68,10 @@
       st.sound = !!st.sound;
       st.awake = !!st.awake;
       st.lowWins = !!st.lowWins;
-      st.rounds = !!st.rounds;
+      st.counter = !!st.counter;
+      st.starter = !!st.starter;
+      st.roundRot = [0, 90, 180, 270].includes(+st.roundRot) ? +st.roundRot : 0;
+      delete st.rounds;   // the old single switch, which defaulted on
       raw.settings = st;
       return raw;
     } catch (_) {
@@ -128,7 +131,8 @@
       : { round: last.r, scored };
   }
 
-  const roundsOn = () => state.settings.rounds && state.players.length > 1;
+  // Rounds are always counted; these only decide whether anybody is shown them.
+  const roundsOn = () => (state.settings.counter || state.settings.starter) && state.players.length > 1;
   // Zero only counts as a move for someone still to score this round; otherwise it's a cancel.
   const zeroCounts = (id) => roundsOn() && !roundNow().scored.has(id);
 
@@ -164,7 +168,8 @@
   const app = $(".app"), dial = $("#dial"), barEl = $(".topbar"),
         dotsEl = $("#dots"), trailEl = $("#trail"),
         topEl = $("#labels-top"), botEl = $("#labels-bottom"),
-        hub = $("#hub"), hubN = $("#hub-n");
+        hub = $("#hub"), hubIn = $("#hub-inner"), hubN = $("#hub-n"),
+        starterEl = $("#starter"), nextBtn = $("#next-round");
 
   const labelEls = new Map();
   const dotEls = new Map();
@@ -412,19 +417,30 @@
     updateRound();
   }
 
-  // The round sits in the hub; the ring shows who starts it and who has already scored.
-  let shownRound = 0;
+  // The hub shows the round and dims whoever has already scored in it; the marker sits
+  // by the round's first player and moves one seat clockwise each round.
+  let shownRound = 0, markerAt = null;
   function updateRound() {
-    const on = roundsOn();
-    hub.hidden = !on;
-    const { round, scored } = on ? roundNow() : { round: 0, scored: new Set() };
-    const starter = on ? state.players[(round - 1) % state.players.length].id : null;
-    dotEls.forEach((el, id) => {
-      el.classList.toggle("is-starter", id === starter);
-      el.classList.toggle("is-done", scored.has(id));
-    });
-    hub.disabled = !scored.size;
-    hub.setAttribute("aria-label", `Round ${round}` + (scored.size ? ". Tap for the next round." : ""));
+    const n = state.players.length;
+    const counter = state.settings.counter && n > 1, marker = state.settings.starter && n > 1;
+    const { round, scored } = roundNow();
+    hub.hidden = !counter;
+    nextBtn.hidden = !(counter || marker);
+    nextBtn.disabled = !scored.size;
+    dotEls.forEach((el, id) => el.classList.toggle("is-done", counter && scored.has(id)));
+    starterEl.hidden = !marker;
+    if (marker) {
+      // Glide the short way round (clockwise on a tie), so a new round steps it forward
+      // one seat and an undo steps it back.
+      const to = seatAngle((round - 1) % n, n) + 90;
+      markerAt = markerAt === null ? to : markerAt + 180 - ((((180 - (to - markerAt)) % 360) + 360) % 360);
+      starterEl.style.transform = `rotate(${markerAt}deg)`;
+      const p = state.players[(round - 1) % n];
+      starterEl.setAttribute("aria-label", `${displayName(p, (round - 1) % n)} starts round ${round}`);
+    } else {
+      markerAt = null;
+    }
+    hub.setAttribute("aria-label", `Round ${round}. Tap to rotate.`);
     if (round === shownRound) return;
     const up = shownRound && round > shownRound;
     shownRound = round;
@@ -435,10 +451,20 @@
     hubN.classList.add("pop");
   }
 
+  // Tap the round to turn it toward whoever is reading it, like a name.
+  hubIn.style.transform = `rotate(${state.settings.roundRot}deg)`;
   hub.onclick = () => {
+    state.settings.roundRot = (state.settings.roundRot + 90) % 360;
+    hubIn.style.transform = `rotate(${state.settings.roundRot}deg)`;
+    buzz(7);
+    save();
+  };
+
+  nextBtn.onclick = () => {
     if (!roundNow().scored.size) return;
     record({ next: true, delta: 0 });
     save();
+    closeSheet();   // back to the board, to watch the round turn over
     refreshScores();
     feedback(true);
   };
@@ -1050,9 +1076,11 @@
   optLow.checked = state.settings.lowWins;
   optLow.onchange = () => { state.settings.lowWins = optLow.checked; updateCrowns(); save(); };
 
-  const optRounds = $("#opt-rounds");
-  optRounds.checked = state.settings.rounds;
-  optRounds.onchange = () => { state.settings.rounds = optRounds.checked; updateRound(); save(); };
+  for (const key of ["counter", "starter"]) {
+    const opt = $("#opt-" + key);
+    opt.checked = state.settings[key];
+    opt.onchange = () => { state.settings[key] = opt.checked; updateRound(); save(); };
+  }
 
   /* history sheet */
   const logEl = $("#log"), standEl = $("#standings");
