@@ -8,6 +8,7 @@
   const C = 2 * Math.PI * R;          // ring circumference
   const MAX_PLAYERS = 12;
   const MAX_LOG = 250;
+  const MAX_ROUNDS = 99;
   const STEPS = [1, 5, 10, 25, 50];   // points added per stop on the ring
 
   const PALETTE = [
@@ -30,7 +31,7 @@
     players: [newPlayer("Player 1", 0), newPlayer("Player 2", 1), newPlayer("Player 3", 2), newPlayer("Player 4", 3)],
     log: [],
     cursor: 0,
-    settings: { steps: 12, step: 1, haptics: true, sound: true, awake: true, lowWins: false, counter: false, starter: false, roundRot: 0 },
+    settings: { steps: 12, step: 1, haptics: true, sound: true, awake: true, lowWins: false, counter: false, starter: false, roundRot: 0, total: 0 },
   });
 
   let uid = Date.now();   // not modulo anything: a wrapping counter re-issues ids across sessions
@@ -60,7 +61,7 @@
           if (raw.players.every((p) => seen.has(p.id))) { r++; seen = new Set(); }
         }
       }
-      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false, awake: true, lowWins: false, counter: false, starter: false, roundRot: 0 }, raw.settings || {});
+      const st = Object.assign({ steps: 12, step: 1, haptics: true, sound: false, awake: true, lowWins: false, counter: false, starter: false, roundRot: 0, total: 0 }, raw.settings || {});
       // Numbers, not strings: syncStep compares with === and steps is a divisor.
       st.step = STEPS.includes(+st.step) ? +st.step : 1;
       st.steps = +st.steps >= 6 && +st.steps <= 24 ? Math.round(+st.steps / 2) * 2 : 12;
@@ -71,6 +72,7 @@
       st.counter = !!st.counter;
       st.starter = !!st.starter;
       st.roundRot = [0, 90, 180, 270].includes(+st.roundRot) ? +st.roundRot : 0;
+      st.total = Math.max(0, Math.min(MAX_ROUNDS, Math.round(+st.total) || 0));   // 0 = no limit
       delete st.rounds;   // the old single switch, which defaulted on
       raw.settings = st;
       return raw;
@@ -113,7 +115,11 @@
   // Every entry carries the round it was made in, so undo and redo move the round too,
   // and who started that round, so history still knows after the seats change.
   function record(e) {
-    const r = roundNow().round, n = state.players.length;
+    // Once the game is over, later moves are corrections: they join the last move's round
+    // and are marked as coming after the end, so they never reopen the game.
+    const now = roundNow(), n = state.players.length;
+    const r = now.over ? state.log[state.cursor - 1].r : now.round;
+    if (now.over) e = { ...e, post: true };
     const s = n ? state.players[(r - 1) % n].id : undefined;
     state.log.length = state.cursor;              // a new move drops the redo tail
     state.log.push({ ...e, r, s, at: Date.now() });
@@ -122,21 +128,36 @@
   }
 
   // A round ends once everybody has scored in it, or when someone calls the next one.
+  // With a set number of rounds the game is over after the last: the round stops there,
+  // and anything scored after it goes down as a correction to the final round.
   function roundNow() {
     const log = state.log, last = log[state.cursor - 1];
-    if (!last) return { round: 1, scored: new Set() };
-    if (last.next) return { round: last.r + 1, scored: new Set() };
-    const scored = new Set();
-    for (let i = state.cursor - 1; i >= 0 && log[i].r === last.r && !log[i].next; i--) scored.add(log[i].playerId);
-    return state.players.every((p) => scored.has(p.id))
-      ? { round: last.r + 1, scored: new Set() }
-      : { round: last.r, scored };
+    let now;
+    if (!last) now = { round: 1, scored: new Set() };
+    else if (last.next || last.post) now = { round: last.r + 1, scored: new Set() };
+    else {
+      const scored = new Set();
+      for (let i = state.cursor - 1; i >= 0 && log[i].r === last.r && !log[i].next; i--) scored.add(log[i].playerId);
+      now = state.players.every((p) => scored.has(p.id))
+        ? { round: last.r + 1, scored: new Set() }
+        : { round: last.r, scored };
+    }
+    const total = totalRounds();
+    now.over = !!total && now.round > total;
+    if (now.over) now.round = total;
+    return now;
   }
+
+  const totalRounds = () => (state.settings.counter ? state.settings.total : 0);
 
   // Rounds are always counted; these only decide whether anybody is shown them.
   const roundsOn = () => (state.settings.counter || state.settings.starter) && state.players.length > 1;
   // Zero only counts as a move for someone still to score this round; otherwise it's a cancel.
-  const zeroCounts = (id) => roundsOn() && !roundNow().scored.has(id);
+  const zeroCounts = (id) => {
+    if (!roundsOn()) return false;
+    const now = roundNow();
+    return !now.over && !now.scored.has(id);
+  };
 
   function undo() {
     if (!state.cursor) return false;
@@ -170,7 +191,8 @@
   const app = $(".app"), dial = $("#dial"), barEl = $(".topbar"),
         dotsEl = $("#dots"), trailEl = $("#trail"),
         topEl = $("#labels-top"), botEl = $("#labels-bottom"),
-        hub = $("#hub"), hubIn = $("#hub-inner"), hubN = $("#hub-n"),
+        hub = $("#hub"), hubIn = $("#hub-inner"), hubN = $("#hub-n"), hubK = $("#hub-k"),
+        hubOf = $("#hub-of"), hubRing = $("#hub-ring"), hubWin = $("#hub-win"),
         starterEl = $("#starter"), nextBtn = $("#next-round");
 
   const labelEls = new Map();
@@ -425,10 +447,18 @@
   function updateRound() {
     const n = state.players.length;
     const counter = state.settings.counter && n > 1, marker = state.settings.starter && n > 1;
-    const { round, scored } = roundNow();
+    const { round, scored, over } = roundNow();
+    const total = totalRounds(), final = !!total && round === total;
     hub.hidden = !counter;
     nextBtn.hidden = !(counter || marker);
-    nextBtn.disabled = !scored.size;
+    nextBtn.disabled = over || !scored.size;
+    nextBtn.textContent = final ? "Finish game" : "Next round";
+    drawRing(total, round, over ? 1 : scored.size / n, over);
+    hub.classList.toggle("is-final", final && !over);
+    hub.classList.toggle("is-over", over);
+    hubK.textContent = final ? "Final round" : "Round";
+    hubOf.textContent = total ? `of ${total}` : "";
+    hubOf.hidden = !total;
     dotEls.forEach((el, id) => el.classList.toggle("is-done", counter && scored.has(id)));
     starterEl.hidden = !marker;
     if (marker) {
@@ -442,19 +472,74 @@
     } else {
       markerAt = null;
     }
-    hub.setAttribute("aria-label", `Round ${round}. Tap to rotate.`);
-    if (round === shownRound) return;
-    const up = shownRound && round > shownRound;
-    shownRound = round;
+    hubWin.hidden = !over;
+    let said = `Round ${round}` + (total ? ` of ${total}` : "");
+    if (over) {
+      // The winner is whoever the crown is on: a tie says so, and a dead heat names nobody.
+      const lead = [...leaders()];
+      const p = lead.length === 1 ? byId(lead[0]) : null;
+      const name = hubWin.querySelector(".hub-who");
+      name.textContent = p ? displayName(p, state.players.indexOf(p)) : "Tie";
+      name.style.color = p ? p.color : "";
+      said = "Game over. " + (p ? `${name.textContent} wins.` : "It's a tie.");
+    }
+    hub.setAttribute("aria-label", said + " Tap to rotate.");
+    const shown = over ? total + 1 : round;
+    if (shown === shownRound) return;
+    const up = shownRound && shown > shownRound;
+    shownRound = shown;
     hubN.textContent = round;
     if (!up) return;
-    hubN.classList.remove("pop");
-    void hubN.offsetWidth;
-    hubN.classList.add("pop");
+    const el = over ? hubWin : hubN;
+    el.classList.remove("pop");
+    void el.offsetWidth;
+    el.classList.add("pop");
+  }
+
+  // The progress ring: one segment per round, drawn round the hub. Rounds played are
+  // filled, and the current one fills a share at a time as its players score. Past
+  // RING_SEGS rounds the segments are too thin to count, so it's one continuous arc.
+  const RING_SEGS = 24, RING_R = 46, RING_W = 3.2, RING_C = 2 * Math.PI * RING_R;
+  let ringSegs = 0;
+  function drawRing(total, round, frac, over) {
+    hubRing.toggleAttribute("hidden", !total);   // an SVG element has no .hidden property
+    if (!total) return;
+    const segs = total > RING_SEGS ? 1 : total;
+    if (segs !== ringSegs) {
+      ringSegs = segs;
+      const g = hubRing.querySelector("g");
+      g.textContent = "";
+      for (let k = 0; k < segs; k++) {
+        for (const cls of ["track", "fill"]) {
+          const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          c.setAttribute("class", cls);
+          c.setAttribute("cx", 50);
+          c.setAttribute("cy", 50);
+          c.setAttribute("r", RING_R);
+          g.appendChild(c);
+        }
+      }
+    }
+    // Round caps overhang each end by half the stroke, so the gap has to allow for them.
+    const gap = segs > 1 ? RING_W + 3 : 0;
+    const len = RING_C / segs - gap;
+    const done = over ? total : round - 1 + frac;
+    const circles = hubRing.querySelectorAll("circle");
+    for (let k = 0; k < segs; k++) {
+      const f = segs === 1 ? done / total : Math.max(0, Math.min(1, done - k));
+      const off = -(k * RING_C / segs + gap / 2);
+      const track = circles[2 * k], fill = circles[2 * k + 1];
+      track.style.strokeDasharray = `${len} ${RING_C}`;
+      track.style.strokeDashoffset = off;
+      fill.style.strokeDasharray = `${f * len} ${RING_C}`;
+      fill.style.strokeDashoffset = off;
+      fill.style.opacity = f > 0 ? 1 : 0;   // a zero-length dash with round caps would still draw a dot
+    }
   }
 
   // Tap the round to turn it toward whoever is reading it, like a name.
   hubIn.style.transform = `rotate(${state.settings.roundRot}deg)`;
+  hubWin.querySelector(".hub-crown").innerHTML = CROWN;
   hub.onclick = () => {
     state.settings.roundRot = (state.settings.roundRot + 90) % 360;
     hubIn.style.transform = `rotate(${state.settings.roundRot}deg)`;
@@ -463,7 +548,8 @@
   };
 
   nextBtn.onclick = () => {
-    if (!roundNow().scored.size) return;
+    const now = roundNow();
+    if (now.over || !now.scored.size) return;
     record({ next: true, delta: 0 });
     save();
     closeSheet();   // back to the board, to watch the round turn over
@@ -1078,11 +1164,29 @@
   optLow.checked = state.settings.lowWins;
   optLow.onchange = () => { state.settings.lowWins = optLow.checked; updateCrowns(); save(); };
 
+  const rowTotal = $("#row-total"), totalVal = $("#total-val");
+  const syncTotal = () => {
+    rowTotal.hidden = !state.settings.counter;
+    totalVal.textContent = state.settings.total || "Off";
+    $("#total-dec").disabled = !state.settings.total;
+    $("#total-inc").disabled = state.settings.total >= MAX_ROUNDS;
+  };
   for (const key of ["counter", "starter"]) {
     const opt = $("#opt-" + key);
     opt.checked = state.settings[key];
-    opt.onchange = () => { state.settings[key] = opt.checked; updateRound(); save(); };
+    opt.onchange = () => { state.settings[key] = opt.checked; syncTotal(); updateRound(); save(); };
   }
+  // Below 1 is Off: no limit, just the round number.
+  for (const [id, d] of [["total-dec", -1], ["total-inc", 1]]) {
+    $("#" + id).onclick = () => {
+      state.settings.total = Math.max(0, Math.min(MAX_ROUNDS, state.settings.total + d));
+      syncTotal();
+      updateRound();
+      feedback();
+      save();
+    };
+  }
+  syncTotal();
 
   /* history sheet */
   const logEl = $("#log"), standEl = $("#standings");
@@ -1116,7 +1220,7 @@
         if (roundsOn() && state.log[idx + 1]?.r !== e.r) {
           const h = document.createElement("div");
           h.className = "round" + (idx >= state.cursor ? " undone" : "");
-          h.innerHTML = `<span>Round ${e.r}</span>`;
+          h.innerHTML = `<span>Round ${e.r}${totalRounds() ? " of " + totalRounds() : ""}</span>`;
           const sp = state.settings.starter && starterOf(e.r);
           if (sp) {
             h.insertAdjacentHTML("beforeend", `<span class="by" style="color:${sp.color}"><i></i>` +

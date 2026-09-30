@@ -79,8 +79,11 @@
       <div class="starter" id="starter" role="img" hidden></div>
       <button class="hub" id="hub" type="button" hidden>
         <span class="hub-inner" id="hub-inner">
-          <span class="hub-k">Round</span>
+          <svg class="hub-ring" id="hub-ring" viewBox="0 0 100 100" aria-hidden="true" hidden><g transform="rotate(-90 50 50)"></g></svg>
+          <span class="hub-k" id="hub-k">Round</span>
           <span class="hub-n" id="hub-n">1</span>
+          <span class="hub-k" id="hub-of" hidden></span>
+          <span class="hub-win" id="hub-win" hidden><span class="hub-crown"></span><span class="hub-who"></span></span>
         </span>
       </button>
     </div>
@@ -113,6 +116,14 @@
         <span>Round counter</span>
         <input type="checkbox" id="opt-counter" class="switch">
       </label>
+      <div class="row stepper-row" id="row-total" hidden>
+        <span>Rounds</span>
+        <div class="stepper">
+          <button type="button" id="total-dec" aria-label="Fewer rounds">−</button>
+          <em id="total-val" aria-live="polite">Off</em>
+          <button type="button" id="total-inc" aria-label="More rounds">+</button>
+        </div>
+      </div>
       <label class="row switch-row">
         <span>Starting player</span>
         <input type="checkbox" id="opt-starter" class="switch">
