@@ -689,6 +689,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   text-transform: uppercase;
   color: var(--muted);
 }
+.log .round { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* The round's first player, marked with the same disc as on the board. */
+.log .round .by { display: flex; align-items: center; gap: 7px; min-width: 0; letter-spacing: .08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.log .round .by i { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--text); box-shadow: 0 0 6px rgba(255, 255, 255, .35); }
 .log .round.undone { opacity: .28; }
 .log .empty { padding: 30px 0; text-align: center; color: #55555c; font-size: 14px; }
 

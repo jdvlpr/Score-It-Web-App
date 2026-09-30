@@ -110,11 +110,13 @@
     save();
   }
 
-  // Every entry carries the round it was made in, so undo and redo move the round too.
+  // Every entry carries the round it was made in, so undo and redo move the round too,
+  // and who started that round, so history still knows after the seats change.
   function record(e) {
-    const r = roundNow().round;
+    const r = roundNow().round, n = state.players.length;
+    const s = n ? state.players[(r - 1) % n].id : undefined;
     state.log.length = state.cursor;              // a new move drops the redo tail
-    state.log.push({ ...e, r, at: Date.now() });
+    state.log.push({ ...e, r, s, at: Date.now() });
     if (state.log.length > MAX_LOG) state.log.splice(0, state.log.length - MAX_LOG);
     state.cursor = state.log.length;
   }
@@ -1099,12 +1101,26 @@
     if (!state.log.length) {
       logEl.innerHTML = '<div class="empty">No moves yet.</div>';
     } else {
+      // A round's starter is whoever its first entry says; saves from before that was
+      // recorded fall back to the seats as they are now.
+      const starters = new Map();
+      for (const e of state.log) if (!starters.has(e.r)) starters.set(e.r, e.s);
+      const starterOf = (r) => {
+        const s = starters.get(r);
+        return s === undefined ? state.players[(r - 1) % state.players.length] : byId(s);
+      };
       for (let idx = state.log.length - 1; idx >= 0; idx--) {   // newest first
         const e = state.log[idx];
         if (roundsOn() && state.log[idx + 1]?.r !== e.r) {
           const h = document.createElement("div");
           h.className = "round" + (idx >= state.cursor ? " undone" : "");
-          h.textContent = "Round " + e.r;
+          h.innerHTML = `<span>Round ${e.r}</span>`;
+          const sp = state.settings.starter && starterOf(e.r);
+          if (sp) {
+            h.insertAdjacentHTML("beforeend", `<span class="by" style="color:${sp.color}"><i></i>` +
+              `${escapeHtml(displayName(sp, state.players.indexOf(sp)))}</span>`);
+            h.lastChild.setAttribute("aria-label", "started by " + displayName(sp, state.players.indexOf(sp)));
+          }
           logEl.append(h);
         }
         if (e.next) continue;   // a called round shows only as its divider
