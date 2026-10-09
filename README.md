@@ -2,7 +2,7 @@
 
 A scorekeeper for 1–12 players that works the way a scorekeeper should: press a
 player's dot and swipe around the ring. No accounts, no network, no build step —
-one static page, live at [score.tandagames.com](https://score.tandagames.com).
+one static page, live at [score.tandagames.com](https://score.tandagames.com). 
 
 <img src="icon.svg" width="88" alt="">
 
