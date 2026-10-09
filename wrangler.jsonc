@@ -1,0 +1,6 @@
+{
+  "name": "score-it",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "." },
+  "routes": [{ "pattern": "score.tandagames.com", "custom_domain": true }]
+}

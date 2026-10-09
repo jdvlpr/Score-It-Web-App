@@ -2,7 +2,7 @@
 
 A scorekeeper for 1–12 players that works the way a scorekeeper should: press a
 player's dot and swipe around the ring. No accounts, no network, no build step —
-one static page you can host on GitHub Pages.
+one static page, live at [score.tandagames.com](https://score.tandagames.com).
 
 <img src="icon.svg" width="88" alt="">
 
@@ -75,24 +75,19 @@ python3 -m http.server 8000
 # then open http://localhost:8000
 ```
 
-## Put it on GitHub Pages
+## Hosting
+
+It is served as static assets by a Cloudflare Worker (`wrangler.jsonc`) at
+`https://score.tandagames.com`. Pushing to `main` deploys it through Workers Builds; to
+deploy by hand:
 
 ```sh
-git init
-git add .
-git commit -m "Score It"
-git branch -M main
-git remote add origin git@github.com:<you>/<repo>.git
-git push -u origin main
+npx wrangler deploy
 ```
 
-Then in the repository: **Settings → Pages → Source: Deploy from a branch →
-`main` / `/ (root)`**. It publishes at `https://<you>.github.io/<repo>/` within a
-minute or two.
-
-Every path in the project is relative, so it works from a repository subpath as
-well as a custom domain. The empty `.nojekyll` file tells Pages to serve the
-files as-is.
+There is no Worker script, only files, so requests never count against the Workers
+request limit. `.assetsignore` keeps the README, `tools/` and the config from being
+served. Every path in the project is relative, so it would work from a subpath too.
 
 On a phone, use **Share → Add to Home Screen** — it launches full screen with no
 browser chrome.
@@ -101,8 +96,8 @@ browser chrome.
 
 `sw.js` is a service worker that keeps a copy of every file, so after the first visit
 the app opens with no connection at all. It asks the network first and only falls
-back to that copy when the request fails or takes more than three seconds, so a push
-to `main` reaches phones on their next launch — there is no cache version to bump.
+back to that copy when the request fails or takes more than three seconds, so a deploy
+reaches phones on their next launch — there is no cache version to bump.
 Every good response also refreshes the stored copy, which keeps the offline version
 current. A new file the page loads must also be added to `FILES` in `sw.js`, or it
 won't be there offline until it has been fetched once.
@@ -114,6 +109,7 @@ index.html      markup and the inline SVG ring
 styles.css      the whole theme; sizes come from CSS custom properties
 app.js          state, the swipe engine, rendering, persistence
 sw.js           service worker: offline copy, network-first updates
+wrangler.jsonc  Cloudflare Worker config: static assets on score.tandagames.com
 tools/          node tools/make-icons.mjs   regenerates the PNG icons
                 node tools/check-sizes.mjs  prints the layout table per screen
 ```

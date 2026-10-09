@@ -28,8 +28,8 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
 
-  // "no-cache" revalidates past the browser's HTTP cache (Pages serves max-age=600),
-  // otherwise a fresh deploy could hide behind a stale copy for ten minutes.
+  // "no-cache" revalidates past the browser's HTTP cache, so a fresh deploy can never
+  // hide behind a stale copy whatever caching headers the host sends.
   const net = fetch(req, { cache: "no-cache" }).then((res) => {
     if (res.ok) {
       const copy = res.clone();
