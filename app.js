@@ -93,7 +93,6 @@
   function save() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(writeNow, 160);
-    syncBrand();   // every change to the log passes through here, and that is all the wordmark watches
   }
   // Phones kill backgrounded tabs without warning — never leave a score in the debounce.
   addEventListener("pagehide", writeNow);
@@ -1501,17 +1500,12 @@
 
   /* ---------------- boot ---------------- */
 
-  // Fade the wordmark out once the board is in use, and bring it back on a reset.
-  const brandEl = $("#brand");
-  const syncBrand = () => { brandEl.style.opacity = state.log.length ? "0" : "1"; };
-
   document.addEventListener("gesturestart", (e) => e.preventDefault());
   let rAF = 0;
   window.addEventListener("resize", () => { cancelAnimationFrame(rAF); rAF = requestAnimationFrame(render); });
   window.addEventListener("orientationchange", () => setTimeout(render, 250));
 
   render();
-  syncBrand();
 
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
     navigator.serviceWorker.register("sw.js").catch(() => {});

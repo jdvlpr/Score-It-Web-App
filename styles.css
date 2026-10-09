@@ -75,15 +75,6 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   gap: 10px;
 }
 
-.brand {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-  color: #3a3a40;
-  transition: opacity .3s var(--ease), color .3s var(--ease);
-}
-
 .iconbtn {
   width: 40px;
   height: 40px;
@@ -903,7 +894,6 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 @media (min-width: 700px) {
   .iconbtn { width: 46px; height: 46px; }
   .iconbtn svg { width: 24px; height: 24px; }
-  .brand { font-size: 14px; }
 }
 
 /* With room to spare the sheet stops being a drawer welded to the bottom bezel and
