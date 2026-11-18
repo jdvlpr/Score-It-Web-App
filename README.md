@@ -2,7 +2,7 @@
 
 A scorekeeper for 1–12 players that works the way a scorekeeper should: press a
 player's dot and swipe around the ring. No accounts, no network, no build step —
-one static page, live at [score.tandagames.com](https://score.tandagames.com). 
+one static page, live at [score.mcmillanthomas.com](https://score.mcmillanthomas.com). 
 
 <img src="icon.svg" width="88" alt="">
 
@@ -78,7 +78,7 @@ python3 -m http.server 8000
 ## Hosting
 
 It is served as static assets by a Cloudflare Worker (`wrangler.jsonc`) at
-`https://score.tandagames.com`. Pushing to `main` deploys it through Workers Builds; to
+`https://score.mcmillanthomas.com`. Pushing to `main` deploys it through Workers Builds; to
 deploy by hand:
 
 ```sh
@@ -109,7 +109,7 @@ index.html      markup and the inline SVG ring
 styles.css      the whole theme; sizes come from CSS custom properties
 app.js          state, the swipe engine, rendering, persistence
 sw.js           service worker: offline copy, network-first updates
-wrangler.jsonc  Cloudflare Worker config: static assets on score.tandagames.com
+wrangler.jsonc  Cloudflare Worker config: static assets on score.mcmillanthomas.com
 tools/          node tools/make-icons.mjs   regenerates the PNG icons
                 node tools/check-sizes.mjs  prints the layout table per screen
 ```
